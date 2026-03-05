@@ -2,7 +2,10 @@
   "name": "agents-mission-control",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["backend", "frontend"],
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
@@ -12,8 +15,10 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
+    "@types/node": "^25.3.3",
     "concurrently": "^9.1.2",
     "husky": "^9.1.7",
-    "playwrite": "file:./scripts/playwrite-cli"
+    "playwrite": "file:./scripts/playwrite-cli",
+    "typescript": "^5.9.3"
   }
 }

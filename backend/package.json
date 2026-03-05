@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
-    "build": "node -e \"console.log('backend: no build step required')\"",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
@@ -13,7 +13,10 @@
     "express": "^4.21.2"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "supertest": "^7.1.0",
+    "tsx": "^4.21.0",
     "vitest": "^3.0.8"
   }
 }
