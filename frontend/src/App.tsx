@@ -112,7 +112,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background text-foreground grid grid-cols-[240px_1fr]">
       <aside className="border-r border-border p-4 bg-card/80 backdrop-blur-sm">
-        <h2 className="text-xl font-semibold mb-1 tracking-tight">Mission Control</h2>
+        <div className="flex items-center gap-3 mb-1">
+          <img src="/brand/logo.svg" alt="Mission Control logo" className="h-8 w-8" />
+          <h2 className="text-xl font-semibold tracking-tight">Mission Control</h2>
+        </div>
         <p className="text-xs text-muted-foreground mb-4">Memory · Projects · Agenda</p>
         <nav className="space-y-2">
           {menuItems.map((item) => (
