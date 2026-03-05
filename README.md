@@ -23,3 +23,6 @@ npx playwright test
 ## Data conventions
 - Agent memories are loaded from `data/memory/<AgentName>/*.md`
 - Agenda files are loaded from `data/agenda/*.md`
+
+## Production
+See `DEPLOYMENT.md` for VPS + Vercel deployment steps (`kelvin-control.site`).

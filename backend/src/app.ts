@@ -8,7 +8,22 @@ import { promisify } from 'node:util';
 import multer from 'multer';
 
 const app = express();
-app.use(cors());
+
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    }
+  })
+);
+
 app.use(express.json());
 
 const upload = multer({ storage: multer.memoryStorage() });

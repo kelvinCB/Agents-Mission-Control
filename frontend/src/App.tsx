@@ -12,6 +12,9 @@ type AgendaEntry = { name: string; content: string };
 const menuItems = ['Memory', 'Projects', 'Agenda'] as const;
 type Menu = (typeof menuItems)[number];
 
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
+const apiUrl = (path: string) => `${API_BASE}${path}`;
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<Menu>('Memory');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -50,7 +53,7 @@ export default function App() {
     try {
       setLoading(true);
       setError('');
-      const [projectsRes, memoryRes, agendaRes] = await Promise.all([fetch('/api/projects'), fetch('/api/memory'), fetch('/api/agenda')]);
+      const [projectsRes, memoryRes, agendaRes] = await Promise.all([fetch(apiUrl('/api/projects')), fetch(apiUrl('/api/memory')), fetch(apiUrl('/api/agenda'))]);
       if (!projectsRes.ok || !memoryRes.ok || !agendaRes.ok) throw new Error('request failed');
       const [projectsData, memoryData, agendaData] = await Promise.all([
         projectsRes.json() as Promise<Project[]>,
@@ -152,7 +155,7 @@ export default function App() {
     if (newMemoryTitle.trim()) formData.append('titlePrefix', newMemoryTitle.trim());
     newMemoryFiles.forEach((file) => formData.append('files', file));
 
-    const response = await fetch('/api/memory', { method: 'POST', body: formData });
+    const response = await fetch(apiUrl('/api/memory'), { method: 'POST', body: formData });
     const data = (await response.json()) as { error?: string; agent?: string; files?: string[] };
     if (!response.ok) return setCreateMessage(data.error || 'Failed to upload files');
 
@@ -186,7 +189,7 @@ export default function App() {
       return;
     }
 
-    const response = await fetch('/api/memory/rename', {
+    const response = await fetch(apiUrl('/api/memory/rename'), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -211,7 +214,7 @@ export default function App() {
   async function handleDeleteMemoryFile() {
     if (!selectedMemory) return;
 
-    const response = await fetch('/api/memory', {
+    const response = await fetch(apiUrl('/api/memory'), {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent: selectedMemory.agent, name: selectedMemory.name })
@@ -233,7 +236,7 @@ export default function App() {
     setSyncMessage('');
 
     try {
-      const response = await fetch('/api/memory/sync', {
+      const response = await fetch(apiUrl('/api/memory/sync'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
