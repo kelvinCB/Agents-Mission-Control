@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "build": "node -e \"console.log('backend: no build step required')\"",
     "test": "vitest run"
   },
   "dependencies": {
