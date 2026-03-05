@@ -1,0 +1,3 @@
+- 09:00 Agent planning
+- 13:00 Implementation block
+- 18:00 Retrospective

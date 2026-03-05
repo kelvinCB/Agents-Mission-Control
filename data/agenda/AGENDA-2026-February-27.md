@@ -1,0 +1,3 @@
+- 08:00 Deep work
+- 11:00 Product review
+- 17:00 Sprint sync
