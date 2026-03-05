@@ -15,14 +15,17 @@ describe('api', () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it('uploads a memory markdown file', async () => {
+  it('uploads one or more memory markdown files', async () => {
     const res = await request(app)
       .post('/api/memory')
       .field('agent', 'Etiven')
-      .field('title', 'Memory-Unit-Test')
-      .attach('file', Buffer.from('# Test Memory\n\ncontent'), 'test.md');
+      .field('titlePrefix', 'Memory-Unit-Test')
+      .attach('files', Buffer.from('# Test Memory\n\ncontent 1'), 'test-1.md')
+      .attach('files', Buffer.from('# Test Memory\n\ncontent 2'), 'test-2.md');
 
     expect(res.status).toBe(201);
     expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.files)).toBe(true);
+    expect(res.body.files.length).toBe(2);
   });
 });

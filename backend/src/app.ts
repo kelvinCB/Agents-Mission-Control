@@ -57,35 +57,41 @@ app.get('/api/memory', async (_req, res) => {
   try { res.json(await readMemory()); } catch { res.status(500).json({ error: 'Failed to load memory data.' }); }
 });
 
-app.post('/api/memory', upload.single('file'), async (req, res) => {
+app.post('/api/memory', upload.array('files', 30), async (req, res) => {
   try {
-    const { agent, title } = req.body as { agent?: string; title?: string };
-    const file = req.file;
+    const { agent, titlePrefix = '' } = req.body as { agent?: string; titlePrefix?: string };
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
 
-    if (!agent || !title || !file) {
-      return res.status(400).json({ error: 'agent, title and .md file are required.' });
-    }
-
-    if (!file.originalname.toLowerCase().endsWith('.md')) {
-      return res.status(400).json({ error: 'Only .md files are allowed.' });
+    if (!agent || files.length === 0) {
+      return res.status(400).json({ error: 'agent and at least one .md file are required.' });
     }
 
     const safeAgent = toSafeFileName(agent);
-    const safeTitle = toSafeFileName(title);
-    if (!safeAgent || !safeTitle) return res.status(400).json({ error: 'Invalid agent or title.' });
+    const safePrefix = toSafeFileName(titlePrefix);
+    if (!safeAgent) return res.status(400).json({ error: 'Invalid agent.' });
+
+    const invalid = files.find((file) => !file.originalname.toLowerCase().endsWith('.md'));
+    if (invalid) {
+      return res.status(400).json({ error: `Only .md files are allowed. Invalid: ${invalid.originalname}` });
+    }
 
     const agentDir = path.join(dataDir, 'memory', safeAgent);
     await fs.mkdir(agentDir, { recursive: true });
 
-    const fileName = safeTitle.endsWith('.md') ? safeTitle : `${safeTitle}.md`;
-    const fullPath = path.join(agentDir, fileName);
+    const savedFiles: string[] = [];
 
-    const rawContent = file.buffer.toString('utf8');
-    await fs.writeFile(fullPath, rawContent, 'utf8');
+    for (const file of files) {
+      const originalBase = toSafeFileName(file.originalname.replace(/\.md$/i, '')) || 'Memory';
+      const baseName = safePrefix ? `${safePrefix}-${originalBase}` : originalBase;
+      const fileName = `${baseName}.md`;
+      const fullPath = path.join(agentDir, fileName);
+      await fs.writeFile(fullPath, file.buffer.toString('utf8'), 'utf8');
+      savedFiles.push(fileName);
+    }
 
-    return res.status(201).json({ ok: true, agent: safeAgent, fileName });
+    return res.status(201).json({ ok: true, agent: safeAgent, files: savedFiles });
   } catch {
-    return res.status(500).json({ error: 'Failed to upload memory file.' });
+    return res.status(500).json({ error: 'Failed to upload memory files.' });
   }
 });
 

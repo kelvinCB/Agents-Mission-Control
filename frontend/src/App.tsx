@@ -24,8 +24,8 @@ export default function App() {
   const [openAgents, setOpenAgents] = useState<Record<string, boolean>>({});
 
   const [newMemoryAgent, setNewMemoryAgent] = useState('Etiven');
-  const [newMemoryTitle, setNewMemoryTitle] = useState('Memory');
-  const [newMemoryFile, setNewMemoryFile] = useState<File | null>(null);
+  const [newMemoryTitle, setNewMemoryTitle] = useState('');
+  const [newMemoryFiles, setNewMemoryFiles] = useState<File[]>([]);
   const [createMessage, setCreateMessage] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [syncing, setSyncing] = useState(false);
@@ -124,19 +124,20 @@ export default function App() {
   async function handleCreateMemoryFile(e: FormEvent) {
     e.preventDefault();
     setCreateMessage('');
-    if (!newMemoryFile) return setCreateMessage('Please attach a .md file first.');
+    if (newMemoryFiles.length === 0) return setCreateMessage('Please attach at least one .md file.');
 
     const formData = new FormData();
     formData.append('agent', newMemoryAgent);
-    formData.append('title', newMemoryTitle);
-    formData.append('file', newMemoryFile);
+    if (newMemoryTitle.trim()) formData.append('titlePrefix', newMemoryTitle.trim());
+    newMemoryFiles.forEach((file) => formData.append('files', file));
 
     const response = await fetch('/api/memory', { method: 'POST', body: formData });
-    const data = (await response.json()) as { error?: string; agent?: string; fileName?: string };
-    if (!response.ok) return setCreateMessage(data.error || 'Failed to upload file');
+    const data = (await response.json()) as { error?: string; agent?: string; files?: string[] };
+    if (!response.ok) return setCreateMessage(data.error || 'Failed to upload files');
 
-    setCreateMessage(`Uploaded ${data.fileName} for ${data.agent}.`);
-    setNewMemoryFile(null);
+    setCreateMessage(`Uploaded ${data.files?.length || 0} file(s) for ${data.agent}.`);
+    setNewMemoryFiles([]);
+    setNewMemoryTitle('');
     await loadAllData();
   }
 
@@ -281,8 +282,14 @@ export default function App() {
                       </option>
                     ))}
                   </Select>
-                  <Input value={newMemoryTitle} onChange={(e) => setNewMemoryTitle(e.target.value)} placeholder="Title" required />
-                  <Input type="file" accept=".md,text/markdown" onChange={(e) => setNewMemoryFile(e.target.files?.[0] || null)} required />
+                  <Input value={newMemoryTitle} onChange={(e) => setNewMemoryTitle(e.target.value)} placeholder="Optional title prefix (e.g. Memory-2026-03-05)" />
+                  <Input
+                    type="file"
+                    accept=".md,text/markdown"
+                    multiple
+                    onChange={(e) => setNewMemoryFiles(Array.from(e.target.files || []))}
+                    required
+                  />
                   <Button type="submit" className="w-full">Upload and Classify</Button>
                   {createMessage && <p className="text-sm text-muted-foreground">{createMessage}</p>}
                 </form>
