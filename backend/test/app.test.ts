@@ -28,4 +28,23 @@ describe('api', () => {
     expect(Array.isArray(res.body.files)).toBe(true);
     expect(res.body.files.length).toBe(2);
   });
+
+  it('rejects non-markdown attachments', async () => {
+    const res = await request(app)
+      .post('/api/memory')
+      .field('agent', 'Etiven')
+      .attach('files', Buffer.from('text'), 'bad.txt');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('Only .md files are allowed');
+  });
+
+  it('rejects upload without agent', async () => {
+    const res = await request(app)
+      .post('/api/memory')
+      .attach('files', Buffer.from('# test'), 'test.md');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('agent and at least one .md file are required');
+  });
 });
