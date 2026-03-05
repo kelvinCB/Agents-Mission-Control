@@ -34,3 +34,8 @@ Thumbs.db
 # Misc cache
 .cache/
 .tmp/
+
+# Test data files
+data/memory/**/Memory-Unit-Test*
+data/memory/**/rename-target.md
+
