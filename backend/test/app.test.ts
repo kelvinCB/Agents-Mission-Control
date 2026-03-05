@@ -47,4 +47,19 @@ describe('api', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('agent and at least one .md file are required');
   });
+
+  it('renames a memory file', async () => {
+    await request(app)
+      .post('/api/memory')
+      .field('agent', 'Etiven')
+      .attach('files', Buffer.from('# Rename Test'), 'rename-source.md');
+
+    const res = await request(app)
+      .patch('/api/memory/rename')
+      .send({ agent: 'Etiven', oldName: 'rename-source', newName: 'rename-target' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.newName).toBe('rename-target.md');
+  });
 });

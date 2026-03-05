@@ -35,6 +35,10 @@ export default function App() {
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentError, setNewAgentError] = useState('');
 
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState('');
+
   useEffect(() => {
     void loadAllData();
   }, []);
@@ -96,6 +100,13 @@ export default function App() {
     setShowAddAgentModal(true);
   }
 
+  function openRenameModal() {
+    if (!selectedMemory) return;
+    setRenameValue(selectedMemory.name);
+    setRenameError('');
+    setShowRenameModal(true);
+  }
+
   function handleConfirmAddAgent() {
     const normalized = newAgentName.trim();
 
@@ -155,6 +166,37 @@ export default function App() {
     setIsDragActive(false);
     const files = Array.from(event.dataTransfer.files || []);
     mergeFilesWithExisting(files);
+  }
+
+  async function handleRenameMemoryTitle() {
+    if (!selectedMemory) return;
+
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      setRenameError('New title is required.');
+      return;
+    }
+
+    const response = await fetch('/api/memory/rename', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent: selectedMemory.agent,
+        oldName: selectedMemory.name,
+        newName: trimmed
+      })
+    });
+
+    const data = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setRenameError(data.error || 'Failed to rename file.');
+      return;
+    }
+
+    setShowRenameModal(false);
+    setRenameValue('');
+    setRenameError('');
+    await loadAllData();
   }
 
   async function handleSyncMemoriesToGithub() {
@@ -277,7 +319,14 @@ export default function App() {
 
             <Card>
               <CardHeader>
-                <CardTitle>{selectedMemory ? `${selectedMemory.name}.md` : 'No file selected'}</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle>{selectedMemory ? `${selectedMemory.name}.md` : 'No file selected'}</CardTitle>
+                  {selectedMemory && (
+                    <Button variant="outline" size="sm" onClick={openRenameModal}>
+                      Edit title
+                    </Button>
+                  )}
+                </div>
                 {selectedMemory && <p className="text-sm text-muted-foreground">Agent: {selectedMemory.agent}</p>}
               </CardHeader>
               <CardContent>
@@ -380,6 +429,34 @@ export default function App() {
                   Cancel
                 </Button>
                 <Button onClick={handleConfirmAddAgent}>Add Agent</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showRenameModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Edit Memory Title</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Input
+                value={renameValue}
+                onChange={(e) => {
+                  setRenameValue(e.target.value);
+                  if (renameError) setRenameError('');
+                }}
+                placeholder="New title"
+                autoFocus
+              />
+              {renameError && <p className="text-sm text-red-400">{renameError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowRenameModal(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => void handleRenameMemoryTitle()}>Save title</Button>
               </div>
             </CardContent>
           </Card>

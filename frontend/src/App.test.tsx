@@ -10,6 +10,10 @@ function mockFetchOk() {
       return Promise.resolve(new Response(JSON.stringify({ message: 'Memory files synced to GitHub main.' }), { status: 200 }));
     }
 
+    if (method === 'PATCH' && String(url).includes('/api/memory/rename')) {
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    }
+
     if (method === 'POST' && String(url).includes('/api/memory')) {
       return Promise.resolve(new Response(JSON.stringify({ agent: 'Etiven', files: ['Memory-test-1.md', 'Memory-test-2.md'] }), { status: 201 }));
     }
@@ -67,6 +71,22 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText('Drag & drop .md files here')).toBeInTheDocument());
+  });
+
+  it('renames selected memory title', async () => {
+    const fetchMock = mockFetchOk();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit title' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Edit Memory Title' })).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText('New title'), { target: { value: 'Memory-Renamed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save title' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/memory/rename', expect.objectContaining({ method: 'PATCH' }))
+    );
   });
 
   it('triggers memory sync action', async () => {

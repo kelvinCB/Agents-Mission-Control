@@ -95,6 +95,34 @@ app.post('/api/memory', upload.array('files', 30), async (req, res) => {
   }
 });
 
+app.patch('/api/memory/rename', async (req, res) => {
+  try {
+    const { agent, oldName, newName } = (req.body ?? {}) as { agent?: string; oldName?: string; newName?: string };
+
+    if (!agent || !oldName || !newName) {
+      return res.status(400).json({ error: 'agent, oldName and newName are required.' });
+    }
+
+    const safeAgent = toSafeFileName(agent);
+    const safeOld = `${toSafeFileName(oldName.replace(/\.md$/i, ''))}.md`;
+    const safeNew = `${toSafeFileName(newName.replace(/\.md$/i, ''))}.md`;
+
+    if (!safeAgent || !safeOld || !safeNew) {
+      return res.status(400).json({ error: 'Invalid rename payload.' });
+    }
+
+    const agentDir = path.join(dataDir, 'memory', safeAgent);
+    const oldPath = path.join(agentDir, safeOld);
+    const newPath = path.join(agentDir, safeNew);
+
+    await fs.rename(oldPath, newPath);
+
+    return res.json({ ok: true, agent: safeAgent, oldName: safeOld, newName: safeNew });
+  } catch {
+    return res.status(500).json({ error: 'Failed to rename memory file.' });
+  }
+});
+
 app.post('/api/memory/sync', async (req, res) => {
   try {
     const commitMessage = (req.body as { message?: string } | undefined)?.message?.trim() || 'chore(memory): sync memory files from mission control';

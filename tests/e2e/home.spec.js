@@ -22,6 +22,11 @@ test('memory accordion and add-agent modal interactions', async ({ page }) => {
   await etivenHeader.click();
   await expect(page.getByRole('button', { name: 'main-memory.md Etiven' })).toBeVisible();
 
+  await page.getByRole('button', { name: 'Edit title' }).click();
+  await expect(page.getByRole('heading', { name: 'Edit Memory Title' })).toBeVisible();
+  await page.getByPlaceholder('New title').fill('E2E-Renamed-Memory');
+  await page.getByRole('button', { name: 'Save title' }).click();
+
   await page.getByRole('button', { name: 'Agregar Agente' }).click();
   await expect(page.getByRole('heading', { name: 'Add Agent' })).toBeVisible();
 
@@ -30,5 +35,5 @@ test('memory accordion and add-agent modal interactions', async ({ page }) => {
   await expect(page.getByText('This agent already exists.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByText('Add Agent')).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Add Agent' })).not.toBeVisible();
 });
