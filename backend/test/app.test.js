@@ -9,9 +9,18 @@ describe('api', () => {
     expect(res.body).toHaveLength(3);
   });
 
-  it('returns memory groups', async () => {
+  it('returns memory groups with files array', async () => {
     const res = await request(app).get('/api/memory');
     expect(res.status).toBe(200);
-    expect(res.body.some((x) => x.agent === 'Etiven')).toBe(true);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+    expect(Array.isArray(res.body[0].files)).toBe(true);
+  });
+
+  it('returns agenda entries', async () => {
+    const res = await request(app).get('/api/agenda');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
   });
 });

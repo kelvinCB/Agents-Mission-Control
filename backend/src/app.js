@@ -1,13 +1,15 @@
 import express from 'express';
 import cors from 'cors';
-import fs from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const app = express();
 app.use(cors());
 
-const rootDir = path.resolve(process.cwd(), '..');
-const dataDir = path.join(rootDir, 'data');
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(currentDir, '..', '..');
+const dataDir = process.env.DATA_DIR || path.join(rootDir, 'data');
 
 const projects = [
   {
@@ -30,42 +32,60 @@ const projects = [
   }
 ];
 
-function readMemory() {
+async function readMemory() {
   const memoryRoot = path.join(dataDir, 'memory');
-  const agents = fs.readdirSync(memoryRoot, { withFileTypes: true }).filter((d) => d.isDirectory());
+  const agentEntries = await fs.readdir(memoryRoot, { withFileTypes: true });
+  const agents = agentEntries.filter((entry) => entry.isDirectory());
 
-  return agents.map((agent) => {
-    const agentPath = path.join(memoryRoot, agent.name);
-    const files = fs
-      .readdirSync(agentPath)
-      .filter((file) => file.endsWith('.md'))
-      .sort();
+  return Promise.all(
+    agents.map(async (agent) => {
+      const agentPath = path.join(memoryRoot, agent.name);
+      const files = (await fs.readdir(agentPath)).filter((file) => file.endsWith('.md')).sort();
 
-    return {
-      agent: agent.name,
-      files: files.map((name) => ({
-        name: name.replace('.md', ''),
-        content: fs.readFileSync(path.join(agentPath, name), 'utf8')
-      }))
-    };
-  });
+      const parsedFiles = await Promise.all(
+        files.map(async (name) => ({
+          name: name.replace('.md', ''),
+          content: await fs.readFile(path.join(agentPath, name), 'utf8')
+        }))
+      );
+
+      return {
+        agent: agent.name,
+        files: parsedFiles
+      };
+    })
+  );
 }
 
-function readAgenda() {
+async function readAgenda() {
   const agendaRoot = path.join(dataDir, 'agenda');
-  return fs
-    .readdirSync(agendaRoot)
-    .filter((f) => f.endsWith('.md'))
-    .sort()
-    .map((file) => ({
+  const files = (await fs.readdir(agendaRoot)).filter((file) => file.endsWith('.md')).sort();
+
+  return Promise.all(
+    files.map(async (file) => ({
       name: file.replace('.md', ''),
-      content: fs.readFileSync(path.join(agendaRoot, file), 'utf8')
-    }));
+      content: await fs.readFile(path.join(agendaRoot, file), 'utf8')
+    }))
+  );
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/projects', (_req, res) => res.json(projects));
-app.get('/api/memory', (_req, res) => res.json(readMemory()));
-app.get('/api/agenda', (_req, res) => res.json(readAgenda()));
+
+app.get('/api/memory', async (_req, res) => {
+  try {
+    res.json(await readMemory());
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load memory data.' });
+  }
+});
+
+app.get('/api/agenda', async (_req, res) => {
+  try {
+    res.json(await readAgenda());
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load agenda data.' });
+  }
+});
 
 export default app;
