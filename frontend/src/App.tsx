@@ -27,6 +27,8 @@ export default function App() {
   const [newMemoryTitle, setNewMemoryTitle] = useState('Memory');
   const [newMemoryFile, setNewMemoryFile] = useState<File | null>(null);
   const [createMessage, setCreateMessage] = useState('');
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
@@ -138,6 +140,30 @@ export default function App() {
     await loadAllData();
   }
 
+  async function handleSyncMemoriesToGithub() {
+    setSyncing(true);
+    setSyncMessage('');
+
+    try {
+      const response = await fetch('/api/memory/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      const data = (await response.json()) as { error?: string; message?: string };
+      if (!response.ok) {
+        setSyncMessage(data.error || 'Failed to sync memory files to GitHub.');
+      } else {
+        setSyncMessage(data.message || 'Memory files synced to GitHub.');
+      }
+    } catch {
+      setSyncMessage('Failed to sync memory files to GitHub.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground grid grid-cols-[240px_1fr]">
       <aside className="border-r border-border p-4 bg-card/80 backdrop-blur-sm">
@@ -183,7 +209,15 @@ export default function App() {
         )}
 
         {!loading && !error && activeMenu === 'Memory' && (
-          <section className="grid grid-cols-[280px_1fr_360px] gap-4">
+          <section className="space-y-3">
+            <div className="flex justify-end">
+              <Button onClick={handleSyncMemoriesToGithub} disabled={syncing}>
+                {syncing ? 'Syncing...' : 'Guardar memories a GitHub'}
+              </Button>
+            </div>
+            {syncMessage && <p className="text-sm text-muted-foreground text-right">{syncMessage}</p>}
+
+            <div className="grid grid-cols-[280px_1fr_360px] gap-4">
             <Card className="p-2 max-h-[76vh] overflow-auto">
               {Object.entries(groupedFilteredMemory).map(([agent, files]) => {
                 const isOpen = openAgents[agent] ?? true;
@@ -254,6 +288,7 @@ export default function App() {
                 </form>
               </CardContent>
             </Card>
+            </div>
           </section>
         )}
 

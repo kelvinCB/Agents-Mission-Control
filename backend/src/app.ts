@@ -3,6 +3,8 @@ import cors from 'cors';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { exec as execCb } from 'node:child_process';
+import { promisify } from 'node:util';
 import multer from 'multer';
 
 const app = express();
@@ -10,6 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 const upload = multer({ storage: multer.memoryStorage() });
+const exec = promisify(execCb);
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(currentDir, '..', '..');
@@ -83,6 +86,27 @@ app.post('/api/memory', upload.single('file'), async (req, res) => {
     return res.status(201).json({ ok: true, agent: safeAgent, fileName });
   } catch {
     return res.status(500).json({ error: 'Failed to upload memory file.' });
+  }
+});
+
+app.post('/api/memory/sync', async (req, res) => {
+  try {
+    const commitMessage = (req.body as { message?: string } | undefined)?.message?.trim() || 'chore(memory): sync memory files from mission control';
+    const targetPath = path.join('data', 'memory');
+
+    await exec(`git add ${targetPath}`, { cwd: rootDir });
+    const { stdout: statusOut } = await exec(`git status --porcelain ${targetPath}`, { cwd: rootDir });
+
+    if (!statusOut.trim()) {
+      return res.json({ ok: true, pushed: false, message: 'No memory changes to sync.' });
+    }
+
+    await exec(`git commit -m ${JSON.stringify(commitMessage)}`, { cwd: rootDir });
+    await exec('git push origin main', { cwd: rootDir });
+
+    return res.json({ ok: true, pushed: true, message: 'Memory files synced to GitHub main.' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to sync memory files to GitHub.' });
   }
 });
 
