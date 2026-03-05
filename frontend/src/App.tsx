@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Input } from './components/ui/input';
+import { Select } from './components/ui/select';
 
 type Project = { title: string; url: string; image: string; progress: number };
 type MemoryFile = { name: string; content: string };
@@ -71,6 +72,12 @@ export default function App() {
   }, [filteredMemory]);
 
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
+
+  const agentOptions = useMemo(() => {
+    const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
+    const merged = new Set([...fromMemory, newMemoryAgent].filter(Boolean));
+    return Array.from(merged).sort((a, b) => a.localeCompare(b));
+  }, [memory, newMemoryAgent]);
 
   function toggleAgent(agent: string) {
     setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
@@ -201,7 +208,13 @@ export default function App() {
               </CardHeader>
               <CardContent>
                 <form className="space-y-2" onSubmit={(e) => void handleCreateMemoryFile(e)}>
-                  <Input value={newMemoryAgent} onChange={(e) => setNewMemoryAgent(e.target.value)} placeholder="Agent" required />
+                  <Select value={newMemoryAgent} onChange={(e) => setNewMemoryAgent(e.target.value)} required>
+                    {agentOptions.map((agent) => (
+                      <option key={agent} value={agent}>
+                        {agent}
+                      </option>
+                    ))}
+                  </Select>
                   <Input value={newMemoryTitle} onChange={(e) => setNewMemoryTitle(e.target.value)} placeholder="Title" required />
                   <Input type="file" accept=".md,text/markdown" onChange={(e) => setNewMemoryFile(e.target.files?.[0] || null)} required />
                   <Button type="submit" className="w-full">Upload and Classify</Button>
