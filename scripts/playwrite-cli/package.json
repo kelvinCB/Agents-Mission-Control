@@ -1,0 +1,7 @@
+{
+  "name": "playwrite",
+  "version": "1.0.0",
+  "bin": {
+    "playwrite": "index.js"
+  }
+}
