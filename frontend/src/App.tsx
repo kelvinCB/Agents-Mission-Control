@@ -28,6 +28,10 @@ export default function App() {
   const [newMemoryFile, setNewMemoryFile] = useState<File | null>(null);
   const [createMessage, setCreateMessage] = useState('');
 
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentError, setNewAgentError] = useState('');
+
   useEffect(() => {
     void loadAllData();
   }, []);
@@ -84,10 +88,35 @@ export default function App() {
   }
 
   function handleAddAgent() {
-    const agentName = window.prompt('Agent name');
-    if (!agentName) return;
-    setNewMemoryAgent(agentName.trim());
-    setOpenAgents((prev) => ({ ...prev, [agentName.trim()]: true }));
+    setNewAgentName('');
+    setNewAgentError('');
+    setShowAddAgentModal(true);
+  }
+
+  function handleConfirmAddAgent() {
+    const normalized = newAgentName.trim();
+
+    if (!normalized) {
+      setNewAgentError('Agent name is required.');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9-_\s]+$/.test(normalized)) {
+      setNewAgentError('Use only letters, numbers, spaces, dash or underscore.');
+      return;
+    }
+
+    const exists = agentOptions.some((agent) => agent.toLowerCase() === normalized.toLowerCase());
+    if (exists) {
+      setNewAgentError('This agent already exists.');
+      return;
+    }
+
+    setNewMemoryAgent(normalized);
+    setOpenAgents((prev) => ({ ...prev, [normalized]: true }));
+    setShowAddAgentModal(false);
+    setNewAgentName('');
+    setNewAgentError('');
   }
 
   async function handleCreateMemoryFile(e: FormEvent) {
@@ -243,6 +272,34 @@ export default function App() {
           </section>
         )}
       </main>
+
+      {showAddAgentModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Add Agent</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Input
+                value={newAgentName}
+                onChange={(e) => {
+                  setNewAgentName(e.target.value);
+                  if (newAgentError) setNewAgentError('');
+                }}
+                placeholder="Agent name"
+                autoFocus
+              />
+              {newAgentError && <p className="text-sm text-red-400">{newAgentError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowAddAgentModal(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleConfirmAddAgent}>Add Agent</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
