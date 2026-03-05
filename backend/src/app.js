@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(currentDir, '..', '..');
@@ -31,6 +32,15 @@ const projects = [
     progress: 100
   }
 ];
+
+function toSafeFileName(rawName) {
+  return String(rawName)
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9-_.]/g, '')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^\.+/, '');
+}
 
 async function readMemory() {
   const memoryRoot = path.join(dataDir, 'memory');
@@ -75,15 +85,57 @@ app.get('/api/projects', (_req, res) => res.json(projects));
 app.get('/api/memory', async (_req, res) => {
   try {
     res.json(await readMemory());
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: 'Failed to load memory data.' });
+  }
+});
+
+app.post('/api/memory', async (req, res) => {
+  try {
+    const { agent, title, content, tags = '', source = '', priority = 'normal' } = req.body ?? {};
+
+    if (!agent || !title || !content) {
+      return res.status(400).json({ error: 'agent, title and content are required.' });
+    }
+
+    const safeAgent = toSafeFileName(agent);
+    const safeTitle = toSafeFileName(title);
+
+    if (!safeAgent || !safeTitle) {
+      return res.status(400).json({ error: 'Invalid agent or title.' });
+    }
+
+    const agentDir = path.join(dataDir, 'memory', safeAgent);
+    await fs.mkdir(agentDir, { recursive: true });
+
+    const fileName = safeTitle.endsWith('.md') ? safeTitle : `${safeTitle}.md`;
+    const fullPath = path.join(agentDir, fileName);
+
+    const frontMatter = [
+      `# ${fileName.replace('.md', '')}`,
+      '',
+      `- Agent: ${safeAgent}`,
+      `- Source: ${source || 'manual-entry'}`,
+      `- Tags: ${tags || 'general'}`,
+      `- Priority: ${priority}`,
+      `- CreatedAt: ${new Date().toISOString()}`,
+      '',
+      content,
+      ''
+    ].join('\n');
+
+    await fs.writeFile(fullPath, frontMatter, 'utf8');
+
+    return res.status(201).json({ ok: true, agent: safeAgent, fileName });
+  } catch (_error) {
+    return res.status(500).json({ error: 'Failed to create memory file.' });
   }
 });
 
 app.get('/api/agenda', async (_req, res) => {
   try {
     res.json(await readAgenda());
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: 'Failed to load agenda data.' });
   }
 });

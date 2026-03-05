@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import App from './App.jsx';
 
@@ -7,17 +7,30 @@ describe('App', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders title and project data', async () => {
-    vi.spyOn(global, 'fetch').mockImplementation((url) => {
+  it('renders sidebar and project data', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((url, init) => {
+      if (init?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ agent: 'Etiven', fileName: 'Memory.md' }) });
+      }
+
       if (String(url).includes('/api/projects')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve([{ title: 'Task_Manager', url: 'https://kolium.com', image: 'x', progress: 100 }]) });
+      }
+
+      if (String(url).includes('/api/memory')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{ agent: 'Etiven', files: [{ name: 'main-memory', content: 'hello world' }] }])
+        });
       }
 
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     });
 
     render(<App />);
-    expect(screen.getByText('Agents Mission Control')).toBeInTheDocument();
+    expect(screen.getByText('Mission Control')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
     await waitFor(() => expect(screen.getByText('Task_Manager')).toBeInTheDocument());
   });
 
