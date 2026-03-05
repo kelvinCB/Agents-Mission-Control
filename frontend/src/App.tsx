@@ -20,6 +20,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [memorySearch, setMemorySearch] = useState('');
   const [selectedMemoryKey, setSelectedMemoryKey] = useState('');
+  const [openAgents, setOpenAgents] = useState<Record<string, boolean>>({});
 
   const [newMemoryAgent, setNewMemoryAgent] = useState('Etiven');
   const [newMemoryTitle, setNewMemoryTitle] = useState('Memory');
@@ -44,6 +45,7 @@ export default function App() {
       setProjects(projectsData);
       setMemory(memoryData);
       setAgenda(agendaData);
+      setOpenAgents(Object.fromEntries(memoryData.map((group) => [group.agent, true])));
       const first = memoryData?.[0];
       if (first?.files?.[0]) setSelectedMemoryKey(`${first.agent}/${first.files[0].name}`);
     } catch {
@@ -59,7 +61,27 @@ export default function App() {
     if (!q) return flattenedMemory;
     return flattenedMemory.filter((m) => m.name.toLowerCase().includes(q) || m.agent.toLowerCase().includes(q) || m.content.toLowerCase().includes(q));
   }, [flattenedMemory, memorySearch]);
+
+  const groupedFilteredMemory = useMemo(() => {
+    return filteredMemory.reduce<Record<string, typeof filteredMemory>>((acc, item) => {
+      if (!acc[item.agent]) acc[item.agent] = [];
+      acc[item.agent].push(item);
+      return acc;
+    }, {});
+  }, [filteredMemory]);
+
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
+
+  function toggleAgent(agent: string) {
+    setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
+  }
+
+  function handleAddAgent() {
+    const agentName = window.prompt('Agent name');
+    if (!agentName) return;
+    setNewMemoryAgent(agentName.trim());
+    setOpenAgents((prev) => ({ ...prev, [agentName.trim()]: true }));
+  }
 
   async function handleCreateMemoryFile(e: FormEvent) {
     e.preventDefault();
@@ -124,14 +146,43 @@ export default function App() {
         {!loading && !error && activeMenu === 'Memory' && (
           <section className="grid grid-cols-[280px_1fr_360px] gap-4">
             <Card className="p-2 max-h-[76vh] overflow-auto">
-              {filteredMemory.map((file) => (
-                <Button key={file.key} variant={selectedMemory?.key === file.key ? 'default' : 'secondary'} className="w-full justify-start mb-2 h-auto py-2" onClick={() => setSelectedMemoryKey(file.key)}>
-                  <div>
-                    <div className="font-semibold">{file.name}.md</div>
-                    <div className="text-xs opacity-80">{file.agent}</div>
+              {Object.entries(groupedFilteredMemory).map(([agent, files]) => {
+                const isOpen = openAgents[agent] ?? true;
+                return (
+                  <div key={agent} className="mb-2 rounded-md border border-border bg-secondary/30">
+                    <button
+                      type="button"
+                      onClick={() => toggleAgent(agent)}
+                      className="w-full px-3 py-2 text-left text-sm font-semibold flex items-center justify-between"
+                    >
+                      <span>{agent}</span>
+                      <span className="text-xs text-muted-foreground">{isOpen ? '−' : '+'}</span>
+                    </button>
+
+                    {isOpen && (
+                      <div className="px-2 pb-2 space-y-2">
+                        {files.map((file) => (
+                          <Button
+                            key={file.key}
+                            variant={selectedMemory?.key === file.key ? 'default' : 'secondary'}
+                            className="w-full justify-start h-auto py-2"
+                            onClick={() => setSelectedMemoryKey(file.key)}
+                          >
+                            <div>
+                              <div className="font-semibold">{file.name}.md</div>
+                              <div className="text-xs opacity-80">{agent}</div>
+                            </div>
+                          </Button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </Button>
-              ))}
+                );
+              })}
+
+              <Button variant="outline" className="w-full mt-2" onClick={handleAddAgent}>
+                Agregar Agente
+              </Button>
             </Card>
 
             <Card>
