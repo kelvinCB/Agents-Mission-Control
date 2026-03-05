@@ -15,12 +15,13 @@ describe('api', () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it('creates a memory file', async () => {
-    const res = await request(app).post('/api/memory').send({
-      agent: 'Etiven',
-      title: 'Memory-Unit-Test',
-      content: 'created from test'
-    });
+  it('uploads a memory markdown file', async () => {
+    const res = await request(app)
+      .post('/api/memory')
+      .field('agent', 'Etiven')
+      .field('title', 'Memory-Unit-Test')
+      .attach('file', Buffer.from('# Test Memory\n\ncontent'), 'test.md');
+
     expect(res.status).toBe(201);
     expect(res.body.ok).toBe(true);
   });

@@ -3,10 +3,13 @@ import cors from 'cors';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import multer from 'multer';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(currentDir, '..', '..');
@@ -51,12 +54,18 @@ app.get('/api/memory', async (_req, res) => {
   try { res.json(await readMemory()); } catch { res.status(500).json({ error: 'Failed to load memory data.' }); }
 });
 
-app.post('/api/memory', async (req, res) => {
+app.post('/api/memory', upload.single('file'), async (req, res) => {
   try {
-    const { agent, title, content, tags = '', source = '', priority = 'normal' } = req.body as {
-      agent?: string; title?: string; content?: string; tags?: string; source?: string; priority?: string;
-    };
-    if (!agent || !title || !content) return res.status(400).json({ error: 'agent, title and content are required.' });
+    const { agent, title } = req.body as { agent?: string; title?: string };
+    const file = req.file;
+
+    if (!agent || !title || !file) {
+      return res.status(400).json({ error: 'agent, title and .md file are required.' });
+    }
+
+    if (!file.originalname.toLowerCase().endsWith('.md')) {
+      return res.status(400).json({ error: 'Only .md files are allowed.' });
+    }
 
     const safeAgent = toSafeFileName(agent);
     const safeTitle = toSafeFileName(title);
@@ -64,26 +73,16 @@ app.post('/api/memory', async (req, res) => {
 
     const agentDir = path.join(dataDir, 'memory', safeAgent);
     await fs.mkdir(agentDir, { recursive: true });
+
     const fileName = safeTitle.endsWith('.md') ? safeTitle : `${safeTitle}.md`;
     const fullPath = path.join(agentDir, fileName);
 
-    const body = [
-      `# ${fileName.replace('.md', '')}`,
-      '',
-      `- Agent: ${safeAgent}`,
-      `- Source: ${source || 'manual-entry'}`,
-      `- Tags: ${tags || 'general'}`,
-      `- Priority: ${priority}`,
-      `- CreatedAt: ${new Date().toISOString()}`,
-      '',
-      content,
-      ''
-    ].join('\n');
+    const rawContent = file.buffer.toString('utf8');
+    await fs.writeFile(fullPath, rawContent, 'utf8');
 
-    await fs.writeFile(fullPath, body, 'utf8');
     return res.status(201).json({ ok: true, agent: safeAgent, fileName });
   } catch {
-    return res.status(500).json({ error: 'Failed to create memory file.' });
+    return res.status(500).json({ error: 'Failed to upload memory file.' });
   }
 });
 

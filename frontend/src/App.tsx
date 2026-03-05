@@ -20,10 +20,7 @@ export default function App() {
 
   const [newMemoryAgent, setNewMemoryAgent] = useState('Etiven');
   const [newMemoryTitle, setNewMemoryTitle] = useState('Memory');
-  const [newMemoryTags, setNewMemoryTags] = useState('journal');
-  const [newMemorySource, setNewMemorySource] = useState('manual-entry');
-  const [newMemoryPriority, setNewMemoryPriority] = useState('normal');
-  const [newMemoryContent, setNewMemoryContent] = useState('');
+  const [newMemoryFile, setNewMemoryFile] = useState<File | null>(null);
   const [createMessage, setCreateMessage] = useState('');
 
   useEffect(() => { void loadAllData(); }, []);
@@ -62,22 +59,27 @@ export default function App() {
   async function handleCreateMemoryFile(e: FormEvent) {
     e.preventDefault();
     setCreateMessage('');
+
+    if (!newMemoryFile) {
+      setCreateMessage('Please attach a .md file first.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('agent', newMemoryAgent);
+    formData.append('title', newMemoryTitle);
+    formData.append('file', newMemoryFile);
+
     const response = await fetch('/api/memory', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        agent: newMemoryAgent,
-        title: newMemoryTitle,
-        tags: newMemoryTags,
-        source: newMemorySource,
-        priority: newMemoryPriority,
-        content: newMemoryContent
-      })
+      body: formData
     });
+
     const data = (await response.json()) as { error?: string; agent?: string; fileName?: string };
-    if (!response.ok) return setCreateMessage(data.error || 'Failed to create file');
-    setCreateMessage(`Created ${data.fileName} for ${data.agent}.`);
-    setNewMemoryContent('');
+    if (!response.ok) return setCreateMessage(data.error || 'Failed to upload file');
+
+    setCreateMessage(`Uploaded ${data.fileName} for ${data.agent}.`);
+    setNewMemoryFile(null);
     await loadAllData();
   }
 
@@ -141,16 +143,17 @@ export default function App() {
             </article>
 
             <form className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-2" onSubmit={(e) => void handleCreateMemoryFile(e)}>
-              <h3 className="font-semibold">Create Memory File</h3>
+              <h3 className="font-semibold">Attach Memory File (.md)</h3>
               <input className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700" value={newMemoryAgent} onChange={(e) => setNewMemoryAgent(e.target.value)} placeholder="Agent" required />
-              <input className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700" value={newMemoryTitle} onChange={(e) => setNewMemoryTitle(e.target.value)} placeholder="File title" required />
-              <input className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700" value={newMemoryTags} onChange={(e) => setNewMemoryTags(e.target.value)} placeholder="Tags (optional)" />
-              <input className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700" value={newMemorySource} onChange={(e) => setNewMemorySource(e.target.value)} placeholder="Source (optional)" />
-              <select className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700" value={newMemoryPriority} onChange={(e) => setNewMemoryPriority(e.target.value)}>
-                <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option>
-              </select>
-              <textarea className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700" rows={8} value={newMemoryContent} onChange={(e) => setNewMemoryContent(e.target.value)} placeholder="Memory content" required />
-              <button type="submit" className="w-full py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Save Memory.md</button>
+              <input className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700" value={newMemoryTitle} onChange={(e) => setNewMemoryTitle(e.target.value)} placeholder="Title" required />
+              <input
+                className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700"
+                type="file"
+                accept=".md,text/markdown"
+                onChange={(e) => setNewMemoryFile(e.target.files?.[0] || null)}
+                required
+              />
+              <button type="submit" className="w-full py-2 rounded-lg bg-violet-600 hover:bg-violet-500">Upload and Classify</button>
               {createMessage && <p className="text-sm text-slate-300">{createMessage}</p>}
             </form>
           </section>
