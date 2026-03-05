@@ -14,6 +14,10 @@ function mockFetchOk() {
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     }
 
+    if (method === 'DELETE' && String(url).includes('/api/memory')) {
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    }
+
     if (method === 'POST' && String(url).includes('/api/memory')) {
       return Promise.resolve(new Response(JSON.stringify({ agent: 'Etiven', files: ['Memory-test-1.md', 'Memory-test-2.md'] }), { status: 201 }));
     }
@@ -86,6 +90,20 @@ describe('App', () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith('/api/memory/rename', expect.objectContaining({ method: 'PATCH' }))
+    );
+  });
+
+  it('deletes selected memory file', async () => {
+    const fetchMock = mockFetchOk();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete file' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Delete file' }));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Delete Memory File' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/memory', expect.objectContaining({ method: 'DELETE' }))
     );
   });
 

@@ -95,6 +95,30 @@ app.post('/api/memory', upload.array('files', 30), async (req, res) => {
   }
 });
 
+app.delete('/api/memory', async (req, res) => {
+  try {
+    const { agent, name } = (req.body ?? {}) as { agent?: string; name?: string };
+
+    if (!agent || !name) {
+      return res.status(400).json({ error: 'agent and name are required.' });
+    }
+
+    const safeAgent = toSafeFileName(agent);
+    const safeName = `${toSafeFileName(name.replace(/\.md$/i, ''))}.md`;
+
+    if (!safeAgent || !safeName) {
+      return res.status(400).json({ error: 'Invalid delete payload.' });
+    }
+
+    const filePath = path.join(dataDir, 'memory', safeAgent, safeName);
+    await fs.unlink(filePath);
+
+    return res.json({ ok: true, agent: safeAgent, name: safeName });
+  } catch {
+    return res.status(500).json({ error: 'Failed to delete memory file.' });
+  }
+});
+
 app.patch('/api/memory/rename', async (req, res) => {
   try {
     const { agent, oldName, newName } = (req.body ?? {}) as { agent?: string; oldName?: string; newName?: string };

@@ -39,6 +39,9 @@ export default function App() {
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState('');
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
   useEffect(() => {
     void loadAllData();
   }, []);
@@ -105,6 +108,12 @@ export default function App() {
     setRenameValue(selectedMemory.name);
     setRenameError('');
     setShowRenameModal(true);
+  }
+
+  function openDeleteModal() {
+    if (!selectedMemory) return;
+    setDeleteError('');
+    setShowDeleteModal(true);
   }
 
   function handleConfirmAddAgent() {
@@ -199,6 +208,26 @@ export default function App() {
     await loadAllData();
   }
 
+  async function handleDeleteMemoryFile() {
+    if (!selectedMemory) return;
+
+    const response = await fetch('/api/memory', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent: selectedMemory.agent, name: selectedMemory.name })
+    });
+
+    const data = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setDeleteError(data.error || 'Failed to delete file.');
+      return;
+    }
+
+    setShowDeleteModal(false);
+    setDeleteError('');
+    await loadAllData();
+  }
+
   async function handleSyncMemoriesToGithub() {
     setSyncing(true);
     setSyncMessage('');
@@ -224,8 +253,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground grid grid-cols-[240px_1fr]">
-      <aside className="border-r border-border p-4 bg-card/80 backdrop-blur-sm">
+    <div className="min-h-screen bg-background text-foreground grid grid-cols-1 md:grid-cols-[240px_1fr]">
+      <aside className="border-b md:border-b-0 md:border-r border-border p-4 bg-card/80 backdrop-blur-sm">
         <div className="flex items-center gap-3 mb-1">
           <img src="/brand/logo.svg" alt="Mission Control logo" className="h-8 w-8" />
           <h2 className="text-xl font-semibold tracking-tight">Mission Control</h2>
@@ -240,8 +269,8 @@ export default function App() {
         </nav>
       </aside>
 
-      <main className="p-6">
-        <div className="flex justify-between items-center mb-4">
+      <main className="p-4 md:p-6">
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 mb-4">
           <h1 className="text-2xl font-semibold tracking-tight">Agents Mission Control</h1>
           {activeMenu === 'Memory' && <Input className="w-80" placeholder="Search memory..." value={memorySearch} onChange={(e) => setMemorySearch(e.target.value)} />}
         </div>
@@ -276,7 +305,7 @@ export default function App() {
             </div>
             {syncMessage && <p className="text-sm text-muted-foreground text-right">{syncMessage}</p>}
 
-            <div className="grid grid-cols-[280px_1fr_360px] gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr_360px] gap-4">
             <Card className="p-2 max-h-[76vh] overflow-auto">
               {Object.entries(groupedFilteredMemory).map(([agent, files]) => {
                 const isOpen = openAgents[agent] ?? true;
@@ -322,9 +351,14 @@ export default function App() {
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle>{selectedMemory ? `${selectedMemory.name}.md` : 'No file selected'}</CardTitle>
                   {selectedMemory && (
-                    <Button variant="outline" size="sm" onClick={openRenameModal}>
-                      Edit title
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={openRenameModal}>
+                        Edit title
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={openDeleteModal}>
+                        Delete file
+                      </Button>
+                    </div>
                   )}
                 </div>
                 {selectedMemory && <p className="text-sm text-muted-foreground">Agent: {selectedMemory.agent}</p>}
@@ -457,6 +491,28 @@ export default function App() {
                   Cancel
                 </Button>
                 <Button onClick={() => void handleRenameMemoryTitle()}>Save title</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Delete Memory File</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                This will permanently delete <strong>{selectedMemory?.name}.md</strong> from <strong>{selectedMemory?.agent}</strong>.
+              </p>
+              {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => void handleDeleteMemoryFile()}>Delete</Button>
               </div>
             </CardContent>
           </Card>

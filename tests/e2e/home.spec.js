@@ -27,6 +27,10 @@ test('memory accordion and add-agent modal interactions', async ({ page }) => {
   await page.getByPlaceholder('New title').fill('E2E-Renamed-Memory');
   await page.getByRole('button', { name: 'Save title' }).click();
 
+  await page.getByRole('button', { name: 'Delete file' }).click();
+  await expect(page.getByRole('heading', { name: 'Delete Memory File' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
   await page.getByRole('button', { name: 'Agregar Agente' }).click();
   await expect(page.getByRole('heading', { name: 'Add Agent' })).toBeVisible();
 
@@ -36,4 +40,13 @@ test('memory accordion and add-agent modal interactions', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('heading', { name: 'Add Agent' })).not.toBeVisible();
+});
+
+test('mobile layout keeps memory tools accessible', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: 'Mission Control', exact: true })).toBeVisible();
+  await expect(page.getByText('Drag & drop .md files here')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Guardar memories a GitHub' })).toBeVisible();
 });

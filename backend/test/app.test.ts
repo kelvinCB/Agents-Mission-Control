@@ -62,4 +62,18 @@ describe('api', () => {
     expect(res.body.ok).toBe(true);
     expect(res.body.newName).toBe('rename-target.md');
   });
+
+  it('deletes a memory file', async () => {
+    await request(app)
+      .post('/api/memory')
+      .field('agent', 'Etiven')
+      .attach('files', Buffer.from('# Delete Test'), 'delete-source.md');
+
+    const res = await request(app)
+      .delete('/api/memory')
+      .send({ agent: 'Etiven', name: 'delete-source' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
 });
