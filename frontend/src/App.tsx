@@ -81,12 +81,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground grid grid-cols-[250px_1fr]">
-      <aside className="border-r border-border p-4 bg-card">
-        <h2 className="text-xl font-semibold mb-4">Mission Control</h2>
+    <div className="min-h-screen bg-background text-foreground grid grid-cols-[240px_1fr]">
+      <aside className="border-r border-border p-4 bg-card/80 backdrop-blur-sm">
+        <h2 className="text-xl font-semibold mb-1 tracking-tight">Mission Control</h2>
+        <p className="text-xs text-muted-foreground mb-4">Memory · Projects · Agenda</p>
         <nav className="space-y-2">
           {menuItems.map((item) => (
-            <Button key={item} variant={activeMenu === item ? 'default' : 'secondary'} className="w-full justify-start" onClick={() => setActiveMenu(item)}>
+            <Button key={item} variant={activeMenu === item ? 'default' : 'outline'} className="w-full justify-start" onClick={() => setActiveMenu(item)}>
               {item}
             </Button>
           ))}
@@ -95,7 +96,7 @@ export default function App() {
 
       <main className="p-6">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Agents Mission Control</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Agents Mission Control</h1>
           {activeMenu === 'Memory' && <Input className="w-80" placeholder="Search memory..." value={memorySearch} onChange={(e) => setMemorySearch(e.target.value)} />}
         </div>
 
