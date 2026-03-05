@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { DragEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Input } from './components/ui/input';
@@ -26,6 +26,7 @@ export default function App() {
   const [newMemoryAgent, setNewMemoryAgent] = useState('Etiven');
   const [newMemoryTitle, setNewMemoryTitle] = useState('');
   const [newMemoryFiles, setNewMemoryFiles] = useState<File[]>([]);
+  const [isDragActive, setIsDragActive] = useState(false);
   const [createMessage, setCreateMessage] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [syncing, setSyncing] = useState(false);
@@ -139,6 +140,21 @@ export default function App() {
     setNewMemoryFiles([]);
     setNewMemoryTitle('');
     await loadAllData();
+  }
+
+  function mergeFilesWithExisting(incoming: File[]) {
+    const map = new Map<string, File>();
+    [...newMemoryFiles, ...incoming].forEach((file) => {
+      if (file.name.toLowerCase().endsWith('.md')) map.set(file.name, file);
+    });
+    setNewMemoryFiles(Array.from(map.values()));
+  }
+
+  function handleDropFiles(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragActive(false);
+    const files = Array.from(event.dataTransfer.files || []);
+    mergeFilesWithExisting(files);
   }
 
   async function handleSyncMemoriesToGithub() {
@@ -283,13 +299,40 @@ export default function App() {
                     ))}
                   </Select>
                   <Input value={newMemoryTitle} onChange={(e) => setNewMemoryTitle(e.target.value)} placeholder="Optional title prefix (e.g. Memory-2026-03-05)" />
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragActive(true);
+                    }}
+                    onDragLeave={() => setIsDragActive(false)}
+                    onDrop={handleDropFiles}
+                    className={`rounded-md border-2 border-dashed p-4 text-sm text-center transition-colors ${
+                      isDragActive ? 'border-primary bg-accent/40' : 'border-border bg-background/40'
+                    }`}
+                  >
+                    <p className="font-medium">Drag & drop .md files here</p>
+                    <p className="text-xs text-muted-foreground mt-1">or use the file picker below</p>
+                  </div>
+
                   <Input
                     type="file"
                     accept=".md,text/markdown"
                     multiple
-                    onChange={(e) => setNewMemoryFiles(Array.from(e.target.files || []))}
-                    required
+                    onChange={(e) => mergeFilesWithExisting(Array.from(e.target.files || []))}
+                    required={newMemoryFiles.length === 0}
                   />
+
+                  {newMemoryFiles.length > 0 && (
+                    <div className="rounded-md border border-border p-2 max-h-28 overflow-auto">
+                      <p className="text-xs text-muted-foreground mb-1">Selected files ({newMemoryFiles.length})</p>
+                      <ul className="space-y-1">
+                        {newMemoryFiles.map((file) => (
+                          <li key={file.name} className="text-xs">• {file.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <Button type="submit" className="w-full">Upload and Classify</Button>
                   {createMessage && <p className="text-sm text-muted-foreground">{createMessage}</p>}
                 </form>

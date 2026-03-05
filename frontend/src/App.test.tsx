@@ -62,6 +62,13 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('This agent already exists.')).toBeInTheDocument());
   });
 
+  it('shows drag and drop helper in memory upload card', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText('Drag & drop .md files here')).toBeInTheDocument());
+  });
+
   it('triggers memory sync action', async () => {
     const fetchMock = mockFetchOk();
     render(<App />);
