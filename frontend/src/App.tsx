@@ -91,11 +91,22 @@ export default function App() {
 
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
 
+  const normalizedAgenda = useMemo(
+    () =>
+      agenda.map((entry, index) => ({
+        entry,
+        index,
+        nameLc: entry.name.toLowerCase(),
+        contentLc: entry.content.toLowerCase(),
+      })),
+    [agenda],
+  );
+
   const filteredAgenda = useMemo(() => {
     const q = agendaSearch.trim().toLowerCase();
-    if (!q) return agenda;
-    return agenda.filter((entry) => entry.name.toLowerCase().includes(q) || entry.content.toLowerCase().includes(q));
-  }, [agenda, agendaSearch]);
+    if (!q) return normalizedAgenda;
+    return normalizedAgenda.filter((item) => item.nameLc.includes(q) || item.contentLc.includes(q));
+  }, [normalizedAgenda, agendaSearch]);
 
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
@@ -451,7 +462,7 @@ export default function App() {
               <p className="text-sm text-muted-foreground">No agenda entries match your search.</p>
             )}
 
-            {filteredAgenda.map((entry, index) => (
+            {filteredAgenda.map(({ entry, index }) => (
               <Card key={`${entry.name}-${index}`}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
