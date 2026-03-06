@@ -523,8 +523,8 @@ export default function App() {
                 <option value="asc">Oldest → most recent</option>
               </Select>
             </div>
-            {sortedAgenda.map(({ entry, date }, index) => (
-              <Card key={`${entry.name}-${index}`}>
+            {sortedAgenda.map(({ entry, date, index: sourceIndex }) => (
+              <Card key={`${entry.name}-${sourceIndex}`}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
                   {!date && <p className="text-xs text-muted-foreground">Unknown date</p>}
