@@ -8,6 +8,7 @@ type Project = { title: string; url: string; image: string; progress: number };
 type MemoryFile = { name: string; content: string };
 type MemoryGroup = { agent: string; files: MemoryFile[] };
 type AgendaEntry = { name: string; content: string };
+type AgendaSortOrder = 'desc' | 'asc';
 
 const menuItems = ['Memory', 'Projects', 'Agenda'] as const;
 type Menu = (typeof menuItems)[number];
@@ -15,11 +16,51 @@ type Menu = (typeof menuItems)[number];
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 
+const monthIndex: Record<string, number> = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11,
+};
+
+function extractAgendaDate(entry: AgendaEntry): Date | null {
+  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{2})$/i);
+  if (nameMatch) {
+    const year = Number(nameMatch[1]);
+    const month = monthIndex[nameMatch[2].toLowerCase()];
+    const day = Number(nameMatch[3]);
+    if (Number.isFinite(year) && month !== undefined && Number.isFinite(day)) {
+      return new Date(Date.UTC(year, month, day));
+    }
+  }
+
+  const contentMatch = entry.content.match(/#\s*Agenda\s*-\s*(\d{4})-(\d{2})-(\d{2})/i);
+  if (contentMatch) {
+    const year = Number(contentMatch[1]);
+    const month = Number(contentMatch[2]) - 1;
+    const day = Number(contentMatch[3]);
+    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+      return new Date(Date.UTC(year, month, day));
+    }
+  }
+
+  return null;
+}
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<Menu>('Memory');
   const [projects, setProjects] = useState<Project[]>([]);
   const [memory, setMemory] = useState<MemoryGroup[]>([]);
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
+  const [agendaSortOrder, setAgendaSortOrder] = useState<AgendaSortOrder>('desc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [memorySearch, setMemorySearch] = useState('');
@@ -95,6 +136,25 @@ export default function App() {
     const merged = new Set([...fromMemory, newMemoryAgent].filter(Boolean));
     return Array.from(merged).sort((a, b) => a.localeCompare(b));
   }, [memory, newMemoryAgent]);
+
+  const sortedAgenda = useMemo(() => {
+    const withDate = agenda.map((entry, index) => ({
+      entry,
+      index,
+      date: extractAgendaDate(entry),
+    }));
+
+    withDate.sort((a, b) => {
+      const aTime = a.date?.getTime() ?? Number.NEGATIVE_INFINITY;
+      const bTime = b.date?.getTime() ?? Number.NEGATIVE_INFINITY;
+      if (aTime === bTime) {
+        return a.index - b.index;
+      }
+      return agendaSortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+    });
+
+    return withDate.map((item) => item.entry);
+  }, [agenda, agendaSortOrder]);
 
   function toggleAgent(agent: string) {
     setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
@@ -430,7 +490,17 @@ export default function App() {
 
         {!loading && !error && activeMenu === 'Agenda' && (
           <section className="space-y-3">
-            {agenda.map((entry) => (
+            <div className="flex justify-end">
+              <Select
+                className="w-72"
+                value={agendaSortOrder}
+                onChange={(e) => setAgendaSortOrder(e.target.value as AgendaSortOrder)}
+              >
+                <option value="desc">Most recent → oldest</option>
+                <option value="asc">Oldest → most recent</option>
+              </Select>
+            </div>
+            {sortedAgenda.map((entry) => (
               <Card key={entry.name}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
