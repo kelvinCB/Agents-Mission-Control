@@ -80,7 +80,9 @@ function parseAgenda(content: string): ParsedAgenda {
   for (let i = 0; i < lines.length - 1; i += 1) {
     const current = lines[i].trim();
     const next = lines[i + 1].trim();
-    if (current.includes('|') && /^\|?\s*:?-{3,}/.test(next)) {
+    const looksLikeHeader = current.includes('|');
+    const looksLikeSeparator = /^\|?[\s:|\-]+\|?$/.test(next) && next.includes('-');
+    if (looksLikeHeader && looksLikeSeparator) {
       tableHeaderIndex = i;
       break;
     }
@@ -102,7 +104,15 @@ function parseAgenda(content: string): ParsedAgenda {
     const line = lines[i];
     if (!line.trim()) continue;
     if (!line.includes('|')) break;
-    rows.push(parseMarkdownTableRow(line));
+    const row = parseMarkdownTableRow(line);
+    if (headers.length > 0) {
+      while (row.length < headers.length) row.push('');
+      if (row.length > headers.length) {
+        const overflow = row.slice(headers.length - 1).join(' | ');
+        row.splice(headers.length - 1, row.length - (headers.length - 1), overflow);
+      }
+    }
+    rows.push(row);
   }
 
   const notes = lines
