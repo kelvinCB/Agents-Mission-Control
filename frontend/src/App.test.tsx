@@ -42,7 +42,7 @@ function mockFetchOk() {
       return Promise.resolve(
         new Response(
           JSON.stringify([
-            { name: 'AGENDA-2026-March-01', content: '# Agenda - 2026-03-01' },
+            { name: 'AGENDA-2026-Mar-01', content: '# Agenda - 2026-03-01' },
             { name: 'AGENDA-2026-March-06', content: '# Agenda - 2026-03-06' },
             { name: 'AGENDA-2026-March-10', content: '# Agenda - 2026-03-10' },
             { name: 'AGENDA-NO-DATE', content: 'manual notes without parseable date' }
@@ -143,7 +143,7 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Agenda to date'), { target: { value: '2026-03-07' } });
 
     expect(screen.getByText('AGENDA-2026-March-06')).toBeInTheDocument();
-    expect(screen.queryByText('AGENDA-2026-March-01')).not.toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2026-Mar-01')).not.toBeInTheDocument();
     expect(screen.queryByText('AGENDA-2026-March-10')).not.toBeInTheDocument();
     expect(screen.queryByText('AGENDA-NO-DATE')).not.toBeInTheDocument();
   });
@@ -161,7 +161,7 @@ describe('App', () => {
       .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
 
     expect(titles).toEqual([
-      'AGENDA-2026-March-01',
+      'AGENDA-2026-Mar-01',
       'AGENDA-2026-March-06',
       'AGENDA-2026-March-10',
       'AGENDA-NO-DATE'
