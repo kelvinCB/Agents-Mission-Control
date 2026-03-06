@@ -100,6 +100,35 @@ Deploy.
 
 ---
 
+## 6) Auto-deploy backend on every push/merge to `main`
+
+This repo now includes `.github/workflows/deploy-backend.yml`.
+
+Trigger:
+- Any push to `main`
+- Any merged PR to `main` (because merge creates a push event)
+- Manual run from Actions (`workflow_dispatch`)
+
+### Required GitHub secrets (repo → Settings → Secrets and variables → Actions)
+
+- `VPS_HOST` → your server IP or hostname
+- `VPS_USER` → SSH user (example: `kelvin`)
+- `VPS_SSH_KEY` → private key content (recommended: dedicated deploy key)
+
+> Optional: if you use a non-standard SSH port, edit workflow and set `port` in the SSH action.
+
+### What deployment does on VPS
+
+1. `git fetch origin main`
+2. `git checkout main`
+3. `git pull --ff-only origin main`
+4. `npm ci`
+5. `npm run build --workspace backend`
+6. `pm2 startOrReload ecosystem.config.cjs --update-env`
+7. Healthcheck: `curl http://127.0.0.1:4000/api/health`
+
+If any step fails, GitHub Action fails and code is not considered deployed.
+
 ## Notes
 - Backend persists memory files in `data/memory` on VPS disk.
 - Files are only pushed to GitHub when using **Guardar memories a GitHub**.
