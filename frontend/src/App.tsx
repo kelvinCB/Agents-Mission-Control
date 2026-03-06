@@ -8,12 +8,17 @@ type Project = { title: string; url: string; image: string; progress: number };
 type MemoryFile = { name: string; content: string };
 type MemoryGroup = { agent: string; files: MemoryFile[] };
 type AgendaEntry = { name: string; content: string };
+type AgendaSortOrder = 'desc' | 'asc';
 
 const menuItems = ['Memory', 'Projects', 'Agenda'] as const;
 type Menu = (typeof menuItems)[number];
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
 const apiUrl = (path: string) => `${API_BASE}${path}`;
+
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 
 const monthIndex: Record<string, number> = {
   jan: 0,
@@ -39,15 +44,15 @@ const monthIndex: Record<string, number> = {
   nov: 10,
   november: 10,
   dec: 11,
-  december: 11
+  december: 11,
 };
 
 function isValidUtcDateParts(year: number, month: number, day: number): boolean {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
   if (month < 0 || month > 11) return false;
   if (day < 1 || day > 31) return false;
-  const d = new Date(Date.UTC(year, month, day));
-  return d.getUTCFullYear() === year && d.getUTCMonth() === month && d.getUTCDate() === day;
+  const date = new Date(Date.UTC(year, month, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day;
 }
 
 function parseDateInputUtc(value: string, endOfDay = false): Date | null {
@@ -63,7 +68,7 @@ function parseDateInputUtc(value: string, endOfDay = false): Date | null {
 }
 
 function extractAgendaDate(entry: AgendaEntry): Date | null {
-  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]{3,9})-(\d{1,2})$/i);
+  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{1,2})$/i);
   if (nameMatch) {
     const year = Number(nameMatch[1]);
     const month = monthIndex[nameMatch[2].toLowerCase()];
@@ -86,11 +91,157 @@ function extractAgendaDate(entry: AgendaEntry): Date | null {
   return null;
 }
 
+type ParsedAgenda = {
+  heading?: string;
+  headers: string[];
+  rows: string[][];
+  notes: string[];
+};
+
+function parseMarkdownTableRow(line: string): string[] {
+  const normalized = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  const cells: string[] = [];
+  let current = '';
+  let inBackticks = false;
+  let escaped = false;
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    const ch = normalized[i];
+
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      const next = normalized[i + 1];
+      if (next === '|' || next === '\\' || next === '`') {
+        escaped = true;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === '`') {
+      inBackticks = !inBackticks;
+      current += ch;
+      continue;
+    }
+
+    if (ch === '|' && !inBackticks) {
+      cells.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (escaped) {
+    // Preserve trailing backslash when it is not escaping a supported token.
+    current += '\\';
+  }
+
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseAgenda(content: unknown): ParsedAgenda {
+  if (typeof content !== 'string') {
+    return { heading: undefined, headers: [], rows: [], notes: [] };
+  }
+
+  const lines = content.split(/\r?\n/);
+  const heading = lines.find((line) => /^#\s+/.test(line))?.replace(/^#\s+/, '').trim();
+
+  let tableHeaderIndex = -1;
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    const current = lines[i].trim();
+    const next = lines[i + 1].trim();
+    if (!current.includes('|')) continue;
+
+    const headerCells = parseMarkdownTableRow(current);
+    const separatorCells = parseMarkdownTableRow(next);
+    const validSeparatorCells =
+      separatorCells.length >= 1 && separatorCells.every((cell) => /^:?-{3,}:?$/.test(cell));
+
+    if (headerCells.length >= 1 && headerCells.length === separatorCells.length && validSeparatorCells) {
+      tableHeaderIndex = i;
+      break;
+    }
+  }
+
+  if (tableHeaderIndex === -1) {
+    return {
+      heading,
+      headers: [],
+      rows: [],
+      notes: lines.filter((line) => line.trim() && !/^#\s+/.test(line)).map((line) => line.trim())
+    };
+  }
+
+  const headers = parseMarkdownTableRow(lines[tableHeaderIndex]);
+  const rows: string[][] = [];
+  let notesStartIndex = tableHeaderIndex + 2;
+
+  for (let i = tableHeaderIndex + 2; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim()) {
+      notesStartIndex = i + 1;
+      continue;
+    }
+    if (!line.includes('|')) {
+      notesStartIndex = i;
+      break;
+    }
+
+    const row = parseMarkdownTableRow(line);
+    if (headers.length > 0) {
+      while (row.length < headers.length) row.push('');
+      if (row.length > headers.length) {
+        const overflow = row.slice(headers.length - 1).join(' | ');
+        row.splice(headers.length - 1, row.length - (headers.length - 1), overflow);
+      }
+    }
+    rows.push(row);
+    notesStartIndex = i + 1;
+  }
+
+  const notes = lines
+    .slice(notesStartIndex)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith('|'));
+
+  return { heading, headers, rows, notes };
+}
+
+function statusTone(status: string): string {
+  const normalized = status.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (/\b(done|complete|completed)\b/.test(normalized)) {
+    return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+  }
+  if (/\b(in\s*progress|progress|ongoing|wip|doing|todo|deferred)\b/.test(normalized)) {
+    return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+  }
+  if (/\b(review|pending)\b/.test(normalized)) {
+    return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+  }
+  if (/\b(cancelled|canceled|blocked|on\s*hold|won't\s*do|wont\s*do)\b/.test(normalized)) {
+    return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+  }
+  return 'bg-slate-500/15 text-slate-200 border-slate-500/30';
+}
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<Menu>('Memory');
   const [projects, setProjects] = useState<Project[]>([]);
   const [memory, setMemory] = useState<MemoryGroup[]>([]);
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
+  const [agendaSearch, setAgendaSearch] = useState('');
+  const [agendaSortOrder, setAgendaSortOrder] = useState<AgendaSortOrder>('desc');
   const [agendaFromDate, setAgendaFromDate] = useState('');
   const [agendaToDate, setAgendaToDate] = useState('');
   const [loading, setLoading] = useState(true);
@@ -163,43 +314,70 @@ export default function App() {
 
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
 
-  const agendaFrom = useMemo(() => (agendaFromDate ? parseDateInputUtc(agendaFromDate, false) : null), [agendaFromDate]);
-  const agendaTo = useMemo(() => (agendaToDate ? parseDateInputUtc(agendaToDate, true) : null), [agendaToDate]);
-  const agendaDateInputInvalid =
-    (!!agendaFromDate && !agendaFrom) || (!!agendaToDate && !agendaTo);
-  const agendaDateRangeInvalid = !!agendaFrom && !!agendaTo && agendaFrom > agendaTo;
-  const agendaHasDateFilters = !!agendaFrom || !!agendaTo;
-
-  const filteredAgenda = useMemo(() => {
-    if (agendaDateInputInvalid || agendaDateRangeInvalid) {
-      return [] as AgendaEntry[];
-    }
-
-    return agenda
-      .map((entry, index) => ({ entry, index, date: extractAgendaDate(entry) }))
-      .filter(({ date }) => {
-        if (!date) {
-          // When date filters are active, hide entries that have no parseable date.
-          return !agendaHasDateFilters;
-        }
-        if (agendaFrom && date < agendaFrom) return false;
-        if (agendaTo && date > agendaTo) return false;
-        return true;
-      })
-      .sort((a, b) => {
-        const aTime = a.date?.getTime() ?? Number.POSITIVE_INFINITY;
-        const bTime = b.date?.getTime() ?? Number.POSITIVE_INFINITY;
-        if (aTime === bTime) return a.index - b.index;
-        return aTime - bTime;
-      })
-      .map(({ entry }) => entry);
-  }, [agenda, agendaFrom, agendaTo, agendaDateInputInvalid, agendaDateRangeInvalid, agendaHasDateFilters]);
-
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
     const merged = new Set([...fromMemory, newMemoryAgent].filter(Boolean));
     return Array.from(merged).sort((a, b) => a.localeCompare(b));
   }, [memory, newMemoryAgent]);
+
+  const normalizedAgenda = useMemo(
+    () =>
+      agenda.map((entry, index) => ({
+        entry,
+        index,
+        nameLc: normalizeSearchText(entry.name),
+        contentLc: normalizeSearchText(entry.content),
+      })),
+    [agenda],
+  );
+
+  const filteredAgenda = useMemo(() => {
+    const q = normalizeSearchText(agendaSearch.trim());
+    if (!q) return normalizedAgenda;
+    return normalizedAgenda.filter((item) => item.nameLc.includes(q) || item.contentLc.includes(q));
+  }, [normalizedAgenda, agendaSearch]);
+
+  const fromDateUtc = useMemo(() => parseDateInputUtc(agendaFromDate, false), [agendaFromDate]);
+  const toDateUtc = useMemo(() => parseDateInputUtc(agendaToDate, true), [agendaToDate]);
+  const agendaDateInputInvalid =
+    (agendaFromDate.trim() !== '' && !fromDateUtc) || (agendaToDate.trim() !== '' && !toDateUtc);
+  const agendaDateRangeInvalid = !!fromDateUtc && !!toDateUtc && fromDateUtc.getTime() > toDateUtc.getTime();
+
+  const sortedFilteredAgenda = useMemo(() => {
+    const withDate = filteredAgenda.map(({ entry, index }) => ({
+      entry,
+      index,
+      date: extractAgendaDate(entry),
+    }));
+
+    const rangeActive = !!fromDateUtc || !!toDateUtc;
+
+    const inRange = withDate.filter((item) => {
+      if (!rangeActive) return true;
+      if (!item.date) return false;
+      const ts = item.date.getTime();
+      if (fromDateUtc && ts < fromDateUtc.getTime()) return false;
+      if (toDateUtc && ts > toDateUtc.getTime()) return false;
+      return true;
+    });
+
+    inRange.sort((a, b) => {
+      const aHasDate = !!a.date;
+      const bHasDate = !!b.date;
+      if (aHasDate !== bHasDate) return aHasDate ? -1 : 1;
+      const aTime = a.date?.getTime() ?? 0;
+      const bTime = b.date?.getTime() ?? 0;
+      if (aTime === bTime) return a.index - b.index;
+      return agendaSortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+    });
+
+    return inRange;
+  }, [filteredAgenda, agendaSortOrder, fromDateUtc, toDateUtc]);
+
+  const parsedAgendaEntries = useMemo(
+    () => sortedFilteredAgenda.map(({ entry, index, date }) => ({ entry, index, date, parsed: parseAgenda(entry.content) })),
+    [sortedFilteredAgenda],
+  );
 
   function toggleAgent(agent: string) {
     setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
@@ -534,8 +712,27 @@ export default function App() {
         )}
 
         {!loading && !error && activeMenu === 'Agenda' && (
-          <section className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <section className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <Input
+                className="w-full"
+                placeholder="Search agenda by keyword..."
+                aria-label="Search agenda entries"
+                value={agendaSearch}
+                onChange={(e) => setAgendaSearch(e.target.value)}
+              />
+              <Select
+                className="w-full"
+                aria-label="Agenda sort order"
+                value={agendaSortOrder}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === 'asc' || value === 'desc') setAgendaSortOrder(value);
+                }}
+              >
+                <option value="desc">Most recent → oldest</option>
+                <option value="asc">Oldest → most recent</option>
+              </Select>
               <Input
                 type="date"
                 value={agendaFromDate}
@@ -558,17 +755,85 @@ export default function App() {
               <p className="text-sm text-rose-400">Invalid range: "From" date must be earlier than or equal to "To" date.</p>
             )}
 
-            {!agendaDateInputInvalid && !agendaDateRangeInvalid && filteredAgenda.length === 0 && (
-              <p className="text-sm text-muted-foreground">No agenda entries found in this date range.</p>
+            {agenda.length === 0 && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries available yet.</p>
             )}
 
-            {filteredAgenda.map((entry) => (
-              <Card key={entry.name}>
-                <CardHeader>
-                  <CardTitle>{entry.name}</CardTitle>
+            {agenda.length > 0 && !agendaDateInputInvalid && !agendaDateRangeInvalid && parsedAgendaEntries.length === 0 && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">
+                {agendaSearch.trim() || agendaFromDate || agendaToDate
+                  ? 'No agenda entries found for the current filters.'
+                  : 'No agenda entries available yet.'}
+              </p>
+            )}
+
+            {parsedAgendaEntries.map(({ entry, parsed, date, index }) => (
+              <Card key={`${entry.name}-${index}`} className="overflow-hidden">
+                <CardHeader className="pb-3 border-b border-border/70 bg-secondary/25">
+                  <CardTitle className="text-lg">{parsed.heading || entry.name}</CardTitle>
+                  {parsed.heading && <p className="text-xs text-muted-foreground">{entry.name}</p>}
+                  {!date && <p className="text-xs text-muted-foreground">Unknown date</p>}
                 </CardHeader>
-                <CardContent>
-                  <pre className="whitespace-pre-wrap">{entry.content}</pre>
+
+                <CardContent className="pt-4 space-y-4">
+                  {parsed.headers.length > 0 ? (
+                    <div className="overflow-x-auto rounded-md border border-border">
+                      <table className="w-full text-sm">
+                        <caption className="sr-only">{parsed.heading || entry.name} agenda table</caption>
+                        <thead className="bg-secondary/35">
+                          <tr>
+                            {parsed.headers.map((header, idx) => (
+                              <th scope="col" key={`${entry.name}-h-${idx}`} className="px-3 py-2 text-left font-semibold">
+                                {header || `Column ${idx + 1}`}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parsed.rows.length > 0 ? (
+                            parsed.rows.map((row, rowIndex) => {
+                              return (
+                                <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60">
+                                  {row.map((cell, cellIndex) => {
+                                    const isStatusCol = /^status$/i.test(parsed.headers[cellIndex]?.trim() || '');
+                                    return (
+                                      <td key={`${entry.name}-c-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
+                                        {isStatusCol ? (
+                                          <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${statusTone(cell)}`}>
+                                            {cell}
+                                          </span>
+                                        ) : (
+                                          <span>{cell}</span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr className="border-t border-border/60">
+                              <td colSpan={Math.max(parsed.headers.length, 1)} className="px-3 py-3 text-sm text-muted-foreground">
+                                No items in this agenda yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-border bg-secondary/15 p-3">
+                      <pre className="whitespace-pre-wrap text-sm leading-relaxed">{entry.content}</pre>
+                    </div>
+                  )}
+
+                  {parsed.notes.length > 0 && (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      {parsed.notes.map((note, idx) => (
+                        <p key={`${entry.name}-note-${idx}`}>{note}</p>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
