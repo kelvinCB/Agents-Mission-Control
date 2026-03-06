@@ -20,6 +20,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [memory, setMemory] = useState<MemoryGroup[]>([]);
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
+  const [agendaSearch, setAgendaSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [memorySearch, setMemorySearch] = useState('');
@@ -89,6 +90,12 @@ export default function App() {
   }, [filteredMemory]);
 
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
+
+  const filteredAgenda = useMemo(() => {
+    const q = agendaSearch.trim().toLowerCase();
+    if (!q) return agenda;
+    return agenda.filter((entry) => entry.name.toLowerCase().includes(q) || entry.content.toLowerCase().includes(q));
+  }, [agenda, agendaSearch]);
 
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
@@ -430,7 +437,20 @@ export default function App() {
 
         {!loading && !error && activeMenu === 'Agenda' && (
           <section className="space-y-3">
-            {agenda.map((entry) => (
+            <div className="flex justify-end">
+              <Input
+                className="w-full md:w-96"
+                placeholder="Search agenda by keyword..."
+                value={agendaSearch}
+                onChange={(e) => setAgendaSearch(e.target.value)}
+              />
+            </div>
+
+            {filteredAgenda.length === 0 && (
+              <p className="text-sm text-muted-foreground">No agenda entries match your search.</p>
+            )}
+
+            {filteredAgenda.map((entry) => (
               <Card key={entry.name}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>

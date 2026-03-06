@@ -38,6 +38,18 @@ function mockFetchOk() {
       );
     }
 
+    if (String(url).includes('/api/agenda')) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([
+            { name: 'AGENDA-2026-March-01', content: 'Marathon prep and shopping list' },
+            { name: 'AGENDA-2026-March-02', content: 'OpenClaw PR reviews and cron updates' }
+          ]),
+          { status: 200 }
+        )
+      );
+    }
+
     return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
   });
 }
@@ -116,6 +128,21 @@ describe('App', () => {
 
     await waitFor(() => expect(screen.getByText('Memory files synced to GitHub main.')).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith('/api/memory/sync', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('filters agenda entries by keyword', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-01')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText('Search agenda by keyword...'), {
+      target: { value: 'marathon' }
+    });
+
+    expect(screen.getByText('AGENDA-2026-March-01')).toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2026-March-02')).not.toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {
