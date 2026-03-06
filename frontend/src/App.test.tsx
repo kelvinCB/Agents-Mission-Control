@@ -2,6 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
+function resolvePathname(url: RequestInfo | URL): string {
+  const rawUrl = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+  return new URL(rawUrl, 'http://localhost').pathname;
+}
+
 function mockFetchOk() {
   return vi.spyOn(global, 'fetch').mockImplementation((url: RequestInfo | URL, init?: RequestInit) => {
     const method = init?.method || 'GET';
@@ -22,11 +27,13 @@ function mockFetchOk() {
       return Promise.resolve(new Response(JSON.stringify({ agent: 'Etiven', files: ['Memory-test-1.md', 'Memory-test-2.md'] }), { status: 201 }));
     }
 
-    if (String(url).includes('/api/projects')) {
+    const requestUrl = resolvePathname(url);
+
+    if (requestUrl === '/api/projects') {
       return Promise.resolve(new Response(JSON.stringify([{ title: 'Task_Manager', url: 'https://kolium.com', image: 'x', progress: 100 }]), { status: 200 }));
     }
 
-    if (String(url).includes('/api/memory')) {
+    if (requestUrl === '/api/memory') {
       return Promise.resolve(
         new Response(
           JSON.stringify([
@@ -38,12 +45,12 @@ function mockFetchOk() {
       );
     }
 
-    if (String(url).includes('/api/agenda')) {
+    if (requestUrl === '/api/agenda') {
       return Promise.resolve(
         new Response(
           JSON.stringify([
             { name: 'AGENDA-2026-February-24', content: '# Agenda - 2026-02-24' },
-            { name: 'AGENDA-2026-March-1', content: '# Agenda - 2026-03-01' },
+            { name: 'AGENDA-2026-March-1', content: 'Maratón prep and shopping list\n# Agenda - 2026-03-01' },
             { name: 'AGENDA-2025-August-01', content: '# Agenda - 2025-08-01' },
             { name: 'AGENDA-NO-DATE', content: 'manual note without parseable date' }
           ]),
@@ -157,6 +164,21 @@ describe('App', () => {
     expect(ascTitles[0]).toBe('AGENDA-2025-August-01');
     expect(ascTitles[ascTitles.length - 1]).toBe('AGENDA-NO-DATE');
     expect(screen.getByText('Unknown date')).toBeInTheDocument();
+  });
+
+  it('filters agenda entries by keyword', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText('Search agenda by keyword...'), {
+      target: { value: 'maraton' }
+    });
+
+    expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2026-February-24')).not.toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {

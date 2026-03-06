@@ -16,6 +16,10 @@ type Menu = (typeof menuItems)[number];
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 const monthIndex: Record<string, number> = {
   january: 0,
   february: 1,
@@ -69,6 +73,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [memory, setMemory] = useState<MemoryGroup[]>([]);
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
+  const [agendaSearch, setAgendaSearch] = useState('');
   const [agendaSortOrder, setAgendaSortOrder] = useState<AgendaSortOrder>('desc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -140,14 +145,31 @@ export default function App() {
 
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
 
+  const normalizedAgenda = useMemo(
+    () =>
+      agenda.map((entry, index) => ({
+        entry,
+        index,
+        nameLc: normalizeSearchText(entry.name),
+        contentLc: normalizeSearchText(entry.content),
+      })),
+    [agenda],
+  );
+
+  const filteredAgenda = useMemo(() => {
+    const q = normalizeSearchText(agendaSearch.trim());
+    if (!q) return normalizedAgenda;
+    return normalizedAgenda.filter((item) => item.nameLc.includes(q) || item.contentLc.includes(q));
+  }, [normalizedAgenda, agendaSearch]);
+
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
     const merged = new Set([...fromMemory, newMemoryAgent].filter(Boolean));
     return Array.from(merged).sort((a, b) => a.localeCompare(b));
   }, [memory, newMemoryAgent]);
 
-  const sortedAgenda = useMemo(() => {
-    const withDate = agenda.map((entry, index) => ({
+  const sortedFilteredAgenda = useMemo(() => {
+    const withDate = filteredAgenda.map(({ entry, index }) => ({
       entry,
       index,
       date: extractAgendaDate(entry),
@@ -171,7 +193,7 @@ export default function App() {
     });
 
     return withDate;
-  }, [agenda, agendaSortOrder]);
+  }, [filteredAgenda, agendaSortOrder]);
 
   function toggleAgent(agent: string) {
     setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
@@ -507,9 +529,16 @@ export default function App() {
 
         {!loading && !error && activeMenu === 'Agenda' && (
           <section className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex flex-col md:flex-row gap-2 md:justify-end">
+              <Input
+                className="w-full md:w-96"
+                placeholder="Search agenda by keyword..."
+                aria-label="Search agenda entries"
+                value={agendaSearch}
+                onChange={(e) => setAgendaSearch(e.target.value)}
+              />
               <Select
-                className="w-72"
+                className="w-full md:w-72"
                 aria-label="Agenda sort order"
                 value={agendaSortOrder}
                 onChange={(e) => {
@@ -523,7 +552,16 @@ export default function App() {
                 <option value="asc">Oldest → most recent</option>
               </Select>
             </div>
-            {sortedAgenda.map(({ entry, date, index: sourceIndex }) => (
+
+            {agenda.length === 0 && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries available yet.</p>
+            )}
+
+            {agenda.length > 0 && agendaSearch.trim() && sortedFilteredAgenda.length === 0 && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries match your search.</p>
+            )}
+
+            {sortedFilteredAgenda.map(({ entry, date, index: sourceIndex }) => (
               <Card key={`${entry.name}-${sourceIndex}`}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
