@@ -441,6 +441,7 @@ export default function App() {
               <Input
                 className="w-full md:w-96"
                 placeholder="Search agenda by keyword..."
+                aria-label="Search agenda entries"
                 value={agendaSearch}
                 onChange={(e) => setAgendaSearch(e.target.value)}
               />
@@ -450,8 +451,8 @@ export default function App() {
               <p className="text-sm text-muted-foreground">No agenda entries match your search.</p>
             )}
 
-            {filteredAgenda.map((entry) => (
-              <Card key={entry.name}>
+            {filteredAgenda.map((entry, index) => (
+              <Card key={`${entry.name}-${index}`}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
                 </CardHeader>

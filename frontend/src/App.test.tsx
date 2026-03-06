@@ -22,11 +22,13 @@ function mockFetchOk() {
       return Promise.resolve(new Response(JSON.stringify({ agent: 'Etiven', files: ['Memory-test-1.md', 'Memory-test-2.md'] }), { status: 201 }));
     }
 
-    if (String(url).includes('/api/projects')) {
+    const requestUrl = String(url);
+
+    if (requestUrl === '/api/projects') {
       return Promise.resolve(new Response(JSON.stringify([{ title: 'Task_Manager', url: 'https://kolium.com', image: 'x', progress: 100 }]), { status: 200 }));
     }
 
-    if (String(url).includes('/api/memory')) {
+    if (requestUrl === '/api/memory') {
       return Promise.resolve(
         new Response(
           JSON.stringify([
@@ -38,7 +40,7 @@ function mockFetchOk() {
       );
     }
 
-    if (String(url).includes('/api/agenda')) {
+    if (requestUrl === '/api/agenda') {
       return Promise.resolve(
         new Response(
           JSON.stringify([
