@@ -23,12 +23,43 @@ type ParsedAgenda = {
 };
 
 function parseMarkdownTableRow(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim());
+  const normalized = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  const cells: string[] = [];
+  let current = '';
+  let inBackticks = false;
+  let escaped = false;
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    const ch = normalized[i];
+
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '`') {
+      inBackticks = !inBackticks;
+      current += ch;
+      continue;
+    }
+
+    if (ch === '|' && !inBackticks) {
+      cells.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += ch;
+  }
+
+  cells.push(current.trim());
+  return cells;
 }
 
 function parseAgenda(content: string): ParsedAgenda {
@@ -527,7 +558,7 @@ export default function App() {
                         <tbody>
                           {parsed.rows.length > 0 ? (
                             parsed.rows.map((row, rowIndex) => (
-                              <tr key={`${entry.name}-r-${row.join('|')}-${rowIndex}`} className="border-t border-border/60">
+                              <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60">
                                 {row.map((cell, cellIndex) => {
                                   const isStatusCol = parsed.headers[cellIndex]?.toLowerCase().includes('status');
                                   return (
