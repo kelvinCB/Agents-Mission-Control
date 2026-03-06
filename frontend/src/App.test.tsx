@@ -57,7 +57,8 @@ function mockFetchOk() {
               content:
                 '# Agenda - 2026-03-06\n\n| # | Task | Status |\n|---|------|--------|\n| 1 | Buy sportswear | Pending |\n| 2 | Review OpenClaw PR | In Progress |\n\nSource: workspace memory.'
             },
-            { name: 'AGENDA-2026-March-1', content: 'Maratón prep and shopping list\n# Agenda - 2026-03-01' },
+            { name: 'AGENDA-2026-Mar-01', content: 'Maratón prep and shopping list\n# Agenda - 2026-03-01' },
+            { name: 'AGENDA-2026-March-10', content: '# Agenda - 2026-03-10' },
             { name: 'AGENDA-2025-August-01', content: '# Agenda - 2025-08-01' },
             { name: 'AGENDA-NO-DATE', content: 'manual note without parseable date' }
           ]),
@@ -182,14 +183,43 @@ describe('App', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
-    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-Mar-01')).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText('Search agenda by keyword...'), {
       target: { value: 'maraton' }
     });
 
-    expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument();
+    expect(screen.getByText('AGENDA-2026-Mar-01')).toBeInTheDocument();
     expect(screen.queryByText('AGENDA-2025-August-01')).not.toBeInTheDocument();
+  });
+
+  it('filters agenda by date range', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('Agenda - 2026-03-06')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Agenda from date'), { target: { value: '2026-03-05' } });
+    fireEvent.change(screen.getByLabelText('Agenda to date'), { target: { value: '2026-03-07' } });
+
+    expect(screen.getByText('Agenda - 2026-03-06')).toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2026-Mar-01')).not.toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2026-March-10')).not.toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-NO-DATE')).not.toBeInTheDocument();
+  });
+
+  it('shows validation message when date range is invalid', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('Agenda - 2026-03-06')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Agenda from date'), { target: { value: '2026-03-10' } });
+    fireEvent.change(screen.getByLabelText('Agenda to date'), { target: { value: '2026-03-05' } });
+
+    expect(screen.getByText(/Invalid range:/i)).toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {

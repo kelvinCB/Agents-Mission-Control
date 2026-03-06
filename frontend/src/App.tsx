@@ -21,17 +21,29 @@ function normalizeSearchText(value: string): string {
 }
 
 const monthIndex: Record<string, number> = {
+  jan: 0,
   january: 0,
+  feb: 1,
   february: 1,
+  mar: 2,
   march: 2,
+  apr: 3,
   april: 3,
   may: 4,
+  jun: 5,
   june: 5,
+  jul: 6,
   july: 6,
+  aug: 7,
   august: 7,
+  sep: 8,
+  sept: 8,
   september: 8,
+  oct: 9,
   october: 9,
+  nov: 10,
   november: 10,
+  dec: 11,
   december: 11,
 };
 
@@ -41,6 +53,18 @@ function isValidUtcDateParts(year: number, month: number, day: number): boolean 
   if (day < 1 || day > 31) return false;
   const date = new Date(Date.UTC(year, month, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day;
+}
+
+function parseDateInputUtc(value: string, endOfDay = false): Date | null {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  if (!isValidUtcDateParts(year, month, day)) return null;
+  return endOfDay
+    ? new Date(Date.UTC(year, month, day, 23, 59, 59, 999))
+    : new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
 }
 
 function extractAgendaDate(entry: AgendaEntry): Date | null {
@@ -218,6 +242,8 @@ export default function App() {
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
   const [agendaSearch, setAgendaSearch] = useState('');
   const [agendaSortOrder, setAgendaSortOrder] = useState<AgendaSortOrder>('desc');
+  const [agendaFromDate, setAgendaFromDate] = useState('');
+  const [agendaToDate, setAgendaToDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [memorySearch, setMemorySearch] = useState('');
@@ -311,6 +337,12 @@ export default function App() {
     return normalizedAgenda.filter((item) => item.nameLc.includes(q) || item.contentLc.includes(q));
   }, [normalizedAgenda, agendaSearch]);
 
+  const fromDateUtc = useMemo(() => parseDateInputUtc(agendaFromDate, false), [agendaFromDate]);
+  const toDateUtc = useMemo(() => parseDateInputUtc(agendaToDate, true), [agendaToDate]);
+  const agendaDateInputInvalid =
+    (agendaFromDate.trim() !== '' && !fromDateUtc) || (agendaToDate.trim() !== '' && !toDateUtc);
+  const agendaDateRangeInvalid = !!fromDateUtc && !!toDateUtc && fromDateUtc.getTime() > toDateUtc.getTime();
+
   const sortedFilteredAgenda = useMemo(() => {
     const withDate = filteredAgenda.map(({ entry, index }) => ({
       entry,
@@ -318,7 +350,18 @@ export default function App() {
       date: extractAgendaDate(entry),
     }));
 
-    withDate.sort((a, b) => {
+    const rangeActive = !!fromDateUtc || !!toDateUtc;
+
+    const inRange = withDate.filter((item) => {
+      if (!rangeActive) return true;
+      if (!item.date) return false;
+      const ts = item.date.getTime();
+      if (fromDateUtc && ts < fromDateUtc.getTime()) return false;
+      if (toDateUtc && ts > toDateUtc.getTime()) return false;
+      return true;
+    });
+
+    inRange.sort((a, b) => {
       const aHasDate = !!a.date;
       const bHasDate = !!b.date;
       if (aHasDate !== bHasDate) return aHasDate ? -1 : 1;
@@ -328,8 +371,8 @@ export default function App() {
       return agendaSortOrder === 'desc' ? bTime - aTime : aTime - bTime;
     });
 
-    return withDate;
-  }, [filteredAgenda, agendaSortOrder]);
+    return inRange;
+  }, [filteredAgenda, agendaSortOrder, fromDateUtc, toDateUtc]);
 
   const parsedAgendaEntries = useMemo(
     () => sortedFilteredAgenda.map(({ entry, index, date }) => ({ entry, index, date, parsed: parseAgenda(entry.content) })),
@@ -670,16 +713,16 @@ export default function App() {
 
         {!loading && !error && activeMenu === 'Agenda' && (
           <section className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-2 md:justify-end">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <Input
-                className="w-full md:w-96"
+                className="w-full"
                 placeholder="Search agenda by keyword..."
                 aria-label="Search agenda entries"
                 value={agendaSearch}
                 onChange={(e) => setAgendaSearch(e.target.value)}
               />
               <Select
-                className="w-full md:w-72"
+                className="w-full"
                 aria-label="Agenda sort order"
                 value={agendaSortOrder}
                 onChange={(e) => {
@@ -690,14 +733,38 @@ export default function App() {
                 <option value="desc">Most recent → oldest</option>
                 <option value="asc">Oldest → most recent</option>
               </Select>
+              <Input
+                type="date"
+                value={agendaFromDate}
+                onChange={(e) => setAgendaFromDate(e.target.value)}
+                aria-label="Agenda from date"
+              />
+              <Input
+                type="date"
+                value={agendaToDate}
+                onChange={(e) => setAgendaToDate(e.target.value)}
+                aria-label="Agenda to date"
+              />
             </div>
+
+            {agendaDateInputInvalid && (
+              <p className="text-sm text-rose-400">Invalid date input. Please use a valid YYYY-MM-DD date.</p>
+            )}
+
+            {agendaDateRangeInvalid && (
+              <p className="text-sm text-rose-400">Invalid range: "From" date must be earlier than or equal to "To" date.</p>
+            )}
 
             {agenda.length === 0 && (
               <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries available yet.</p>
             )}
 
-            {agenda.length > 0 && agendaSearch.trim() && parsedAgendaEntries.length === 0 && (
-              <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries match your search.</p>
+            {agenda.length > 0 && !agendaDateInputInvalid && !agendaDateRangeInvalid && parsedAgendaEntries.length === 0 && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">
+                {agendaSearch.trim() || agendaFromDate || agendaToDate
+                  ? 'No agenda entries found for the current filters.'
+                  : 'No agenda entries available yet.'}
+              </p>
             )}
 
             {parsedAgendaEntries.map(({ entry, parsed, date, index }) => (
