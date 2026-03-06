@@ -39,4 +39,12 @@ jobs:
             pm2 startOrReload ecosystem.config.cjs --update-env
             pm2 save
 
+            # Wait until API is ready after reload
+            for i in {1..20}; do
+              if curl -fsS http://127.0.0.1:4000/api/health >/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+
             curl -fsS http://127.0.0.1:4000/api/health
