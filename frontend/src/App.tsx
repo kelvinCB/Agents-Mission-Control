@@ -22,6 +22,15 @@ type ParsedAgenda = {
   notes: string[];
 };
 
+function parseTableSeparator(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+}
+
 function parseMarkdownTableRow(line: string): string[] {
   const normalized = line.trim().replace(/^\|/, '').replace(/\|$/, '');
   const cells: string[] = [];
@@ -72,7 +81,11 @@ function parseMarkdownTableRow(line: string): string[] {
   return cells;
 }
 
-function parseAgenda(content: string): ParsedAgenda {
+function parseAgenda(content: unknown): ParsedAgenda {
+  if (typeof content !== 'string') {
+    return { heading: undefined, headers: [], rows: [], notes: [] };
+  }
+
   const lines = content.split(/\r?\n/);
   const heading = lines.find((line) => /^#\s+/.test(line))?.replace(/^#\s+/, '').trim();
 
@@ -80,9 +93,15 @@ function parseAgenda(content: string): ParsedAgenda {
   for (let i = 0; i < lines.length - 1; i += 1) {
     const current = lines[i].trim();
     const next = lines[i + 1].trim();
-    const looksLikeHeader = current.includes('|');
-    const looksLikeSeparator = /^\|?[\s:|\-]+\|?$/.test(next) && next.includes('-');
-    if (looksLikeHeader && looksLikeSeparator) {
+    if (!current.includes('|')) continue;
+
+    const headerCells = parseMarkdownTableRow(current);
+    const separatorCells = parseTableSeparator(next);
+    const validSeparatorCells =
+      separatorCells.length >= 2 &&
+      separatorCells.every((cell) => /^:?-{3,}:?$/.test(cell));
+
+    if (headerCells.length >= 2 && headerCells.length === separatorCells.length && validSeparatorCells) {
       tableHeaderIndex = i;
       break;
     }
@@ -569,7 +588,7 @@ export default function App() {
                         <thead className="bg-secondary/35">
                           <tr>
                             {parsed.headers.map((header, idx) => (
-                              <th key={`${entry.name}-h-${header || 'col'}-${idx}`} className="px-3 py-2 text-left font-semibold">
+                              <th scope="col" key={`${entry.name}-h-${idx}`} className="px-3 py-2 text-left font-semibold">
                                 {header || `Column ${idx + 1}`}
                               </th>
                             ))}
@@ -580,7 +599,7 @@ export default function App() {
                             parsed.rows.map((row, rowIndex) => (
                               <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60">
                                 {row.map((cell, cellIndex) => {
-                                  const isStatusCol = parsed.headers[cellIndex]?.toLowerCase().includes('status');
+                                  const isStatusCol = /^status$/i.test(parsed.headers[cellIndex]?.trim() || '');
                                   return (
                                     <td key={`${entry.name}-c-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
                                       {isStatusCol ? (
