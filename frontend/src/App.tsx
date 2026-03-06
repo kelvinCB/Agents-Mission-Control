@@ -96,14 +96,14 @@ export default function App() {
       agenda.map((entry, index) => ({
         entry,
         index,
-        nameLc: entry.name.toLowerCase(),
-        contentLc: entry.content.toLowerCase(),
+        nameLc: normalizeSearchText(entry.name),
+        contentLc: normalizeSearchText(entry.content),
       })),
     [agenda],
   );
 
   const filteredAgenda = useMemo(() => {
-    const q = agendaSearch.trim().toLowerCase();
+    const q = normalizeSearchText(agendaSearch.trim());
     if (!q) return normalizedAgenda;
     return normalizedAgenda.filter((item) => item.nameLc.includes(q) || item.contentLc.includes(q));
   }, [normalizedAgenda, agendaSearch]);
