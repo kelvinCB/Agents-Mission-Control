@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 function resolvePathname(url: RequestInfo | URL): string {
-  const rawUrl = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-  return new URL(rawUrl, 'http://localhost').pathname;
+  if (typeof url === 'string') return new URL(url, 'http://localhost').pathname;
+  if (typeof url === 'object' && url !== null && 'href' in url) {
+    return new URL(String((url as { href: string }).href), 'http://localhost').pathname;
+  }
+  return new URL((url as Request).url, 'http://localhost').pathname;
 }
 
 function mockFetchOk() {
@@ -27,13 +30,13 @@ function mockFetchOk() {
       return Promise.resolve(new Response(JSON.stringify({ agent: 'Etiven', files: ['Memory-test-1.md', 'Memory-test-2.md'] }), { status: 201 }));
     }
 
-    const requestUrl = resolvePathname(url);
+    const requestPath = resolvePathname(url);
 
-    if (requestUrl === '/api/projects') {
+    if (requestPath.startsWith('/api/projects')) {
       return Promise.resolve(new Response(JSON.stringify([{ title: 'Task_Manager', url: 'https://kolium.com', image: 'x', progress: 100 }]), { status: 200 }));
     }
 
-    if (requestUrl === '/api/memory') {
+    if (requestPath.startsWith('/api/memory')) {
       return Promise.resolve(
         new Response(
           JSON.stringify([
@@ -45,11 +48,15 @@ function mockFetchOk() {
       );
     }
 
-    if (requestUrl === '/api/agenda') {
+    if (requestPath === '/api/agenda') {
       return Promise.resolve(
         new Response(
           JSON.stringify([
-            { name: 'AGENDA-2026-February-24', content: '# Agenda - 2026-02-24' },
+            {
+              name: 'AGENDA-2026-March-06',
+              content:
+                '# Agenda - 2026-03-06\n\n| # | Task | Status |\n|---|------|--------|\n| 1 | Buy sportswear | Pending |\n| 2 | Review OpenClaw PR | In Progress |\n\nSource: workspace memory.'
+            },
             { name: 'AGENDA-2026-March-1', content: 'Maratón prep and shopping list\n# Agenda - 2026-03-01' },
             { name: 'AGENDA-2025-August-01', content: '# Agenda - 2025-08-01' },
             { name: 'AGENDA-NO-DATE', content: 'manual note without parseable date' }
@@ -139,30 +146,34 @@ describe('App', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/memory/sync', expect.objectContaining({ method: 'POST' }));
   });
 
+  it('renders agenda in a friendly table view', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('Agenda - 2026-03-06')).toBeInTheDocument());
+
+    expect(screen.getByRole('columnheader', { name: 'Task' })).toBeInTheDocument();
+    expect(screen.getByText('Buy sportswear')).toBeInTheDocument();
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
+  });
+
   it('shows agenda sorted newest first by default and allows oldest first', async () => {
     mockFetchOk();
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
-    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Agenda - 2026-03-06')).toBeInTheDocument());
 
-    const agendaTitles = screen
-      .getAllByRole('heading', { level: 3 })
-      .map((el) => el.textContent)
-      .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
-
-    expect(agendaTitles[0]).toBe('AGENDA-2026-March-1');
-    expect(agendaTitles[agendaTitles.length - 1]).toBe('AGENDA-NO-DATE');
+    const newest = screen.getByText('Agenda - 2026-03-06');
+    const undated = screen.getByText('AGENDA-NO-DATE');
+    expect(Boolean(newest.compareDocumentPosition(undated) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
 
     fireEvent.change(screen.getByDisplayValue('Most recent → oldest'), { target: { value: 'asc' } });
 
-    const ascTitles = screen
-      .getAllByRole('heading', { level: 3 })
-      .map((el) => el.textContent)
-      .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
-
-    expect(ascTitles[0]).toBe('AGENDA-2025-August-01');
-    expect(ascTitles[ascTitles.length - 1]).toBe('AGENDA-NO-DATE');
+    const oldest = screen.getByText('AGENDA-2025-August-01');
+    const newestAfterAsc = screen.getByText('Agenda - 2026-03-06');
+    expect(Boolean(oldest.compareDocumentPosition(newestAfterAsc) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(screen.getByText('Unknown date')).toBeInTheDocument();
   });
 
@@ -178,7 +189,7 @@ describe('App', () => {
     });
 
     expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument();
-    expect(screen.queryByText('AGENDA-2026-February-24')).not.toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2025-August-01')).not.toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {
