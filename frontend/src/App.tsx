@@ -15,11 +15,52 @@ type Menu = (typeof menuItems)[number];
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 
+const monthIndex: Record<string, number> = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11
+};
+
+function extractAgendaDate(entry: AgendaEntry): Date | null {
+  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{2})$/i);
+  if (nameMatch) {
+    const year = Number(nameMatch[1]);
+    const month = monthIndex[nameMatch[2].toLowerCase()];
+    const day = Number(nameMatch[3]);
+    if (Number.isFinite(year) && month !== undefined && Number.isFinite(day)) {
+      return new Date(Date.UTC(year, month, day));
+    }
+  }
+
+  const contentMatch = entry.content.match(/#\s*Agenda\s*-\s*(\d{4})-(\d{2})-(\d{2})/i);
+  if (contentMatch) {
+    const year = Number(contentMatch[1]);
+    const month = Number(contentMatch[2]) - 1;
+    const day = Number(contentMatch[3]);
+    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+      return new Date(Date.UTC(year, month, day));
+    }
+  }
+
+  return null;
+}
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<Menu>('Memory');
   const [projects, setProjects] = useState<Project[]>([]);
   const [memory, setMemory] = useState<MemoryGroup[]>([]);
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
+  const [agendaFromDate, setAgendaFromDate] = useState('');
+  const [agendaToDate, setAgendaToDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [memorySearch, setMemorySearch] = useState('');
@@ -89,6 +130,19 @@ export default function App() {
   }, [filteredMemory]);
 
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
+
+  const filteredAgenda = useMemo(() => {
+    const from = agendaFromDate ? new Date(`${agendaFromDate}T00:00:00.000Z`) : null;
+    const to = agendaToDate ? new Date(`${agendaToDate}T23:59:59.999Z`) : null;
+
+    return agenda.filter((entry) => {
+      const entryDate = extractAgendaDate(entry);
+      if (!entryDate) return true;
+      if (from && entryDate < from) return false;
+      if (to && entryDate > to) return false;
+      return true;
+    });
+  }, [agenda, agendaFromDate, agendaToDate]);
 
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
@@ -430,7 +484,26 @@ export default function App() {
 
         {!loading && !error && activeMenu === 'Agenda' && (
           <section className="space-y-3">
-            {agenda.map((entry) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                type="date"
+                value={agendaFromDate}
+                onChange={(e) => setAgendaFromDate(e.target.value)}
+                aria-label="Agenda from date"
+              />
+              <Input
+                type="date"
+                value={agendaToDate}
+                onChange={(e) => setAgendaToDate(e.target.value)}
+                aria-label="Agenda to date"
+              />
+            </div>
+
+            {filteredAgenda.length === 0 && (
+              <p className="text-sm text-muted-foreground">No agenda entries found in this date range.</p>
+            )}
+
+            {filteredAgenda.map((entry) => (
               <Card key={entry.name}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
