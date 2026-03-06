@@ -29,11 +29,11 @@ function mockFetchOk() {
 
     const requestPath = resolvePathname(url);
 
-    if (requestPath === '/api/projects') {
+    if (requestPath.startsWith('/api/projects')) {
       return Promise.resolve(new Response(JSON.stringify([{ title: 'Task_Manager', url: 'https://kolium.com', image: 'x', progress: 100 }]), { status: 200 }));
     }
 
-    if (requestPath === '/api/memory') {
+    if (requestPath.startsWith('/api/memory')) {
       return Promise.resolve(
         new Response(
           JSON.stringify([

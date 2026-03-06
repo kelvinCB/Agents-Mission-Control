@@ -150,6 +150,12 @@ function statusTone(status: string): string {
   if (/\b(in\s*progress|progress|ongoing)\b/.test(normalized)) {
     return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
   }
+  if (/\b(review|pending)\b/.test(normalized)) {
+    return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+  }
+  if (/\b(cancelled|canceled|blocked|on\s*hold|won't\s*do|wont\s*do)\b/.test(normalized)) {
+    return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+  }
   return 'bg-slate-500/15 text-slate-200 border-slate-500/30';
 }
 
@@ -632,7 +638,7 @@ export default function App() {
                   {parsed.notes.length > 0 && (
                     <div className="text-xs text-muted-foreground space-y-1">
                       {parsed.notes.map((note, idx) => (
-                        <p key={`${entry.name}-note-${note}-${idx}`}>{note}</p>
+                        <p key={`${entry.name}-note-${idx}`}>{note}</p>
                       ))}
                     </div>
                   )}
