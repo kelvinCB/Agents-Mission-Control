@@ -2,6 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
+function resolvePathname(url: RequestInfo | URL): string {
+  const rawUrl = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+  return new URL(rawUrl, 'http://localhost').pathname;
+}
+
 function mockFetchOk() {
   return vi.spyOn(global, 'fetch').mockImplementation((url: RequestInfo | URL, init?: RequestInit) => {
     const method = init?.method || 'GET';
@@ -22,11 +27,13 @@ function mockFetchOk() {
       return Promise.resolve(new Response(JSON.stringify({ agent: 'Etiven', files: ['Memory-test-1.md', 'Memory-test-2.md'] }), { status: 201 }));
     }
 
-    if (String(url).includes('/api/projects')) {
+    const requestPath = resolvePathname(url);
+
+    if (requestPath === '/api/projects') {
       return Promise.resolve(new Response(JSON.stringify([{ title: 'Task_Manager', url: 'https://kolium.com', image: 'x', progress: 100 }]), { status: 200 }));
     }
 
-    if (String(url).includes('/api/memory')) {
+    if (requestPath === '/api/memory') {
       return Promise.resolve(
         new Response(
           JSON.stringify([
@@ -38,7 +45,7 @@ function mockFetchOk() {
       );
     }
 
-    if (String(url).includes('/api/agenda')) {
+    if (requestPath === '/api/agenda') {
       return Promise.resolve(
         new Response(
           JSON.stringify([

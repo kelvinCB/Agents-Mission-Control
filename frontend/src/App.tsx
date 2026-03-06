@@ -22,15 +22,6 @@ type ParsedAgenda = {
   notes: string[];
 };
 
-function parseTableSeparator(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim());
-}
-
 function parseMarkdownTableRow(line: string): string[] {
   const normalized = line.trim().replace(/^\|/, '').replace(/\|$/, '');
   const cells: string[] = [];
@@ -96,12 +87,11 @@ function parseAgenda(content: unknown): ParsedAgenda {
     if (!current.includes('|')) continue;
 
     const headerCells = parseMarkdownTableRow(current);
-    const separatorCells = parseTableSeparator(next);
+    const separatorCells = parseMarkdownTableRow(next);
     const validSeparatorCells =
-      separatorCells.length >= 2 &&
-      separatorCells.every((cell) => /^:?-{3,}:?$/.test(cell));
+      separatorCells.length >= 1 && separatorCells.every((cell) => /^:?-{3,}:?$/.test(cell));
 
-    if (headerCells.length >= 2 && headerCells.length === separatorCells.length && validSeparatorCells) {
+    if (headerCells.length >= 1 && headerCells.length === separatorCells.length && validSeparatorCells) {
       tableHeaderIndex = i;
       break;
     }
@@ -118,11 +108,19 @@ function parseAgenda(content: unknown): ParsedAgenda {
 
   const headers = parseMarkdownTableRow(lines[tableHeaderIndex]);
   const rows: string[][] = [];
+  let notesStartIndex = tableHeaderIndex + 2;
 
   for (let i = tableHeaderIndex + 2; i < lines.length; i += 1) {
     const line = lines[i];
-    if (!line.trim()) continue;
-    if (!line.includes('|')) break;
+    if (!line.trim()) {
+      notesStartIndex = i + 1;
+      continue;
+    }
+    if (!line.includes('|')) {
+      notesStartIndex = i;
+      break;
+    }
+
     const row = parseMarkdownTableRow(line);
     if (headers.length > 0) {
       while (row.length < headers.length) row.push('');
@@ -132,10 +130,11 @@ function parseAgenda(content: unknown): ParsedAgenda {
       }
     }
     rows.push(row);
+    notesStartIndex = i + 1;
   }
 
   const notes = lines
-    .slice(tableHeaderIndex + 2 + rows.length)
+    .slice(notesStartIndex)
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !line.startsWith('|'));
@@ -145,10 +144,10 @@ function parseAgenda(content: unknown): ParsedAgenda {
 
 function statusTone(status: string): string {
   const normalized = status.trim().toLowerCase();
-  if (/\b(done|complete|completed)\b/i.test(normalized)) {
+  if (/\b(done|complete|completed)\b/.test(normalized)) {
     return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
   }
-  if (/\b(in\s*progress|progress|ongoing)\b/i.test(normalized)) {
+  if (/\b(in\s*progress|progress|ongoing)\b/.test(normalized)) {
     return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
   }
   return 'bg-slate-500/15 text-slate-200 border-slate-500/30';
