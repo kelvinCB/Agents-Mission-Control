@@ -51,7 +51,7 @@ function parseDateInputUtc(value: string, endOfDay = false): Date | null {
 }
 
 function extractAgendaDate(entry: AgendaEntry): Date | null {
-  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{1,2})$/i);
+  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]{3,9})-(\d{1,2})$/i);
   if (nameMatch) {
     const year = Number(nameMatch[1]);
     const month = monthIndex[nameMatch[2].toLowerCase()];
@@ -163,16 +163,24 @@ export default function App() {
       return [] as AgendaEntry[];
     }
 
-    return agenda.filter((entry) => {
-      const entryDate = extractAgendaDate(entry);
-      if (!entryDate) {
-        // When date filters are active, hide entries that have no parseable date.
-        return !agendaHasDateFilters;
-      }
-      if (agendaFrom && entryDate < agendaFrom) return false;
-      if (agendaTo && entryDate > agendaTo) return false;
-      return true;
-    });
+    return agenda
+      .map((entry, index) => ({ entry, index, date: extractAgendaDate(entry) }))
+      .filter(({ date }) => {
+        if (!date) {
+          // When date filters are active, hide entries that have no parseable date.
+          return !agendaHasDateFilters;
+        }
+        if (agendaFrom && date < agendaFrom) return false;
+        if (agendaTo && date > agendaTo) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const aTime = a.date?.getTime() ?? Number.POSITIVE_INFINITY;
+        const bTime = b.date?.getTime() ?? Number.POSITIVE_INFINITY;
+        if (aTime === bTime) return a.index - b.index;
+        return aTime - bTime;
+      })
+      .map(({ entry }) => entry);
   }, [agenda, agendaFrom, agendaTo, agendaDateInputInvalid, agendaDateRangeInvalid, agendaHasDateFilters]);
 
   const agentOptions = useMemo(() => {

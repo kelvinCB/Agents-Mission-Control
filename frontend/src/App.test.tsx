@@ -148,6 +148,26 @@ describe('App', () => {
     expect(screen.queryByText('AGENDA-NO-DATE')).not.toBeInTheDocument();
   });
 
+  it('sorts agenda chronologically after filtering', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-10')).toBeInTheDocument());
+
+    const titles = screen
+      .getAllByRole('heading', { level: 3 })
+      .map((el) => el.textContent)
+      .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
+
+    expect(titles).toEqual([
+      'AGENDA-2026-March-01',
+      'AGENDA-2026-March-06',
+      'AGENDA-2026-March-10',
+      'AGENDA-NO-DATE'
+    ]);
+  });
+
   it('shows validation message when date range is invalid', async () => {
     mockFetchOk();
     render(<App />);
