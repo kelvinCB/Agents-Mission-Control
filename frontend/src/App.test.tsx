@@ -44,7 +44,8 @@ function mockFetchOk() {
           JSON.stringify([
             { name: 'AGENDA-2026-March-01', content: '# Agenda - 2026-03-01' },
             { name: 'AGENDA-2026-March-06', content: '# Agenda - 2026-03-06' },
-            { name: 'AGENDA-2026-March-10', content: '# Agenda - 2026-03-10' }
+            { name: 'AGENDA-2026-March-10', content: '# Agenda - 2026-03-10' },
+            { name: 'AGENDA-NO-DATE', content: 'manual notes without parseable date' }
           ]),
           { status: 200 }
         )
@@ -144,6 +145,20 @@ describe('App', () => {
     expect(screen.getByText('AGENDA-2026-March-06')).toBeInTheDocument();
     expect(screen.queryByText('AGENDA-2026-March-01')).not.toBeInTheDocument();
     expect(screen.queryByText('AGENDA-2026-March-10')).not.toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-NO-DATE')).not.toBeInTheDocument();
+  });
+
+  it('shows validation message when date range is invalid', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-06')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Agenda from date'), { target: { value: '2026-03-10' } });
+    fireEvent.change(screen.getByLabelText('Agenda to date'), { target: { value: '2026-03-05' } });
+
+    expect(screen.getByText(/Invalid range:/i)).toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {

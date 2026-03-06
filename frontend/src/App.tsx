@@ -30,13 +30,33 @@ const monthIndex: Record<string, number> = {
   december: 11
 };
 
+function isValidUtcDateParts(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 0 || month > 11) return false;
+  if (day < 1 || day > 31) return false;
+  const d = new Date(Date.UTC(year, month, day));
+  return d.getUTCFullYear() === year && d.getUTCMonth() === month && d.getUTCDate() === day;
+}
+
+function parseDateInputUtc(value: string, endOfDay = false): Date | null {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  const day = Number(m[3]);
+  if (!isValidUtcDateParts(year, month, day)) return null;
+  return endOfDay
+    ? new Date(Date.UTC(year, month, day, 23, 59, 59, 999))
+    : new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+}
+
 function extractAgendaDate(entry: AgendaEntry): Date | null {
-  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{2})$/i);
+  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{1,2})$/i);
   if (nameMatch) {
     const year = Number(nameMatch[1]);
     const month = monthIndex[nameMatch[2].toLowerCase()];
     const day = Number(nameMatch[3]);
-    if (Number.isFinite(year) && month !== undefined && Number.isFinite(day)) {
+    if (month !== undefined && isValidUtcDateParts(year, month, day)) {
       return new Date(Date.UTC(year, month, day));
     }
   }
@@ -46,7 +66,7 @@ function extractAgendaDate(entry: AgendaEntry): Date | null {
     const year = Number(contentMatch[1]);
     const month = Number(contentMatch[2]) - 1;
     const day = Number(contentMatch[3]);
-    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+    if (isValidUtcDateParts(year, month, day)) {
       return new Date(Date.UTC(year, month, day));
     }
   }
@@ -131,18 +151,29 @@ export default function App() {
 
   const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
 
+  const agendaFrom = useMemo(() => (agendaFromDate ? parseDateInputUtc(agendaFromDate, false) : null), [agendaFromDate]);
+  const agendaTo = useMemo(() => (agendaToDate ? parseDateInputUtc(agendaToDate, true) : null), [agendaToDate]);
+  const agendaDateInputInvalid =
+    (!!agendaFromDate && !agendaFrom) || (!!agendaToDate && !agendaTo);
+  const agendaDateRangeInvalid = !!agendaFrom && !!agendaTo && agendaFrom > agendaTo;
+  const agendaHasDateFilters = !!agendaFrom || !!agendaTo;
+
   const filteredAgenda = useMemo(() => {
-    const from = agendaFromDate ? new Date(`${agendaFromDate}T00:00:00.000Z`) : null;
-    const to = agendaToDate ? new Date(`${agendaToDate}T23:59:59.999Z`) : null;
+    if (agendaDateInputInvalid || agendaDateRangeInvalid) {
+      return [] as AgendaEntry[];
+    }
 
     return agenda.filter((entry) => {
       const entryDate = extractAgendaDate(entry);
-      if (!entryDate) return true;
-      if (from && entryDate < from) return false;
-      if (to && entryDate > to) return false;
+      if (!entryDate) {
+        // When date filters are active, hide entries that have no parseable date.
+        return !agendaHasDateFilters;
+      }
+      if (agendaFrom && entryDate < agendaFrom) return false;
+      if (agendaTo && entryDate > agendaTo) return false;
       return true;
     });
-  }, [agenda, agendaFromDate, agendaToDate]);
+  }, [agenda, agendaFrom, agendaTo, agendaDateInputInvalid, agendaDateRangeInvalid, agendaHasDateFilters]);
 
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
@@ -499,7 +530,15 @@ export default function App() {
               />
             </div>
 
-            {filteredAgenda.length === 0 && (
+            {agendaDateInputInvalid && (
+              <p className="text-sm text-rose-400">Invalid date input. Please use a valid YYYY-MM-DD date.</p>
+            )}
+
+            {agendaDateRangeInvalid && (
+              <p className="text-sm text-rose-400">Invalid range: "From" date must be earlier than or equal to "To" date.</p>
+            )}
+
+            {!agendaDateInputInvalid && !agendaDateRangeInvalid && filteredAgenda.length === 0 && (
               <p className="text-sm text-muted-foreground">No agenda entries found in this date range.</p>
             )}
 
