@@ -2,6 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
+function resolvePathname(url: RequestInfo | URL): string {
+  const rawUrl = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+  return new URL(rawUrl, 'http://localhost').pathname;
+}
+
 function mockFetchOk() {
   return vi.spyOn(global, 'fetch').mockImplementation((url: RequestInfo | URL, init?: RequestInit) => {
     const method = init?.method || 'GET';
@@ -22,7 +27,7 @@ function mockFetchOk() {
       return Promise.resolve(new Response(JSON.stringify({ agent: 'Etiven', files: ['Memory-test-1.md', 'Memory-test-2.md'] }), { status: 201 }));
     }
 
-    const requestUrl = String(url);
+    const requestUrl = resolvePathname(url);
 
     if (requestUrl === '/api/projects') {
       return Promise.resolve(new Response(JSON.stringify([{ title: 'Task_Manager', url: 'https://kolium.com', image: 'x', progress: 100 }]), { status: 200 }));
@@ -44,7 +49,7 @@ function mockFetchOk() {
       return Promise.resolve(
         new Response(
           JSON.stringify([
-            { name: 'AGENDA-2026-March-01', content: 'Marathon prep and shopping list' },
+            { name: 'AGENDA-2026-March-01', content: 'Maratón prep and shopping list' },
             { name: 'AGENDA-2026-March-02', content: 'OpenClaw PR reviews and cron updates' }
           ]),
           { status: 200 }
@@ -140,7 +145,7 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('AGENDA-2026-March-01')).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText('Search agenda by keyword...'), {
-      target: { value: 'marathon' }
+      target: { value: 'maraton' }
     });
 
     expect(screen.getByText('AGENDA-2026-March-01')).toBeInTheDocument();

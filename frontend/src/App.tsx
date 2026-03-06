@@ -15,6 +15,10 @@ type Menu = (typeof menuItems)[number];
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<Menu>('Memory');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -458,8 +462,12 @@ export default function App() {
               />
             </div>
 
-            {filteredAgenda.length === 0 && (
-              <p className="text-sm text-muted-foreground">No agenda entries match your search.</p>
+            {agenda.length === 0 && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries available yet.</p>
+            )}
+
+            {agenda.length > 0 && agendaSearch.trim() && filteredAgenda.length === 0 && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries match your search.</p>
             )}
 
             {filteredAgenda.map(({ entry, index }) => (
