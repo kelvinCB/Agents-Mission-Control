@@ -32,7 +32,7 @@ const monthIndex: Record<string, number> = {
 };
 
 function extractAgendaDate(entry: AgendaEntry): Date | null {
-  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{2})$/i);
+  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{1,2})$/i);
   if (nameMatch) {
     const year = Number(nameMatch[1]);
     const month = monthIndex[nameMatch[2].toLowerCase()];
@@ -145,15 +145,23 @@ export default function App() {
     }));
 
     withDate.sort((a, b) => {
-      const aTime = a.date?.getTime() ?? Number.NEGATIVE_INFINITY;
-      const bTime = b.date?.getTime() ?? Number.NEGATIVE_INFINITY;
+      const aHasDate = !!a.date;
+      const bHasDate = !!b.date;
+
+      if (aHasDate !== bHasDate) {
+        // Keep undated entries always at the end for both sort modes.
+        return aHasDate ? -1 : 1;
+      }
+
+      const aTime = a.date?.getTime() ?? 0;
+      const bTime = b.date?.getTime() ?? 0;
       if (aTime === bTime) {
         return a.index - b.index;
       }
       return agendaSortOrder === 'desc' ? bTime - aTime : aTime - bTime;
     });
 
-    return withDate.map((item) => item.entry);
+    return withDate;
   }, [agenda, agendaSortOrder]);
 
   function toggleAgent(agent: string) {
@@ -494,16 +502,22 @@ export default function App() {
               <Select
                 className="w-72"
                 value={agendaSortOrder}
-                onChange={(e) => setAgendaSortOrder(e.target.value as AgendaSortOrder)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === 'asc' || value === 'desc') {
+                    setAgendaSortOrder(value);
+                  }
+                }}
               >
                 <option value="desc">Most recent → oldest</option>
                 <option value="asc">Oldest → most recent</option>
               </Select>
             </div>
-            {sortedAgenda.map((entry) => (
+            {sortedAgenda.map(({ entry, date }) => (
               <Card key={entry.name}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
+                  {!date && <p className="text-xs text-muted-foreground">Unknown date</p>}
                 </CardHeader>
                 <CardContent>
                   <pre className="whitespace-pre-wrap">{entry.content}</pre>

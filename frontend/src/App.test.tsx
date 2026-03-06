@@ -43,8 +43,9 @@ function mockFetchOk() {
         new Response(
           JSON.stringify([
             { name: 'AGENDA-2026-February-24', content: '# Agenda - 2026-02-24' },
-            { name: 'AGENDA-2026-March-01', content: '# Agenda - 2026-03-01' },
-            { name: 'AGENDA-2025-August-01', content: '# Agenda - 2025-08-01' }
+            { name: 'AGENDA-2026-March-1', content: '# Agenda - 2026-03-01' },
+            { name: 'AGENDA-2025-August-01', content: '# Agenda - 2025-08-01' },
+            { name: 'AGENDA-NO-DATE', content: 'manual note without parseable date' }
           ]),
           { status: 200 }
         )
@@ -136,15 +137,15 @@ describe('App', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
-    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-01')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument());
 
     const agendaTitles = screen
       .getAllByRole('heading', { level: 3 })
       .map((el) => el.textContent)
       .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
 
-    expect(agendaTitles[0]).toBe('AGENDA-2026-March-01');
-    expect(agendaTitles[agendaTitles.length - 1]).toBe('AGENDA-2025-August-01');
+    expect(agendaTitles[0]).toBe('AGENDA-2026-March-1');
+    expect(agendaTitles[agendaTitles.length - 1]).toBe('AGENDA-NO-DATE');
 
     fireEvent.change(screen.getByDisplayValue('Most recent → oldest'), { target: { value: 'asc' } });
 
@@ -154,7 +155,8 @@ describe('App', () => {
       .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
 
     expect(ascTitles[0]).toBe('AGENDA-2025-August-01');
-    expect(ascTitles[ascTitles.length - 1]).toBe('AGENDA-2026-March-01');
+    expect(ascTitles[ascTitles.length - 1]).toBe('AGENDA-NO-DATE');
+    expect(screen.getByText('Unknown date')).toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {
