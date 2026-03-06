@@ -56,7 +56,10 @@ function mockFetchOk() {
               name: 'AGENDA-2026-March-06',
               content:
                 '# Agenda - 2026-03-06\n\n| # | Task | Status |\n|---|------|--------|\n| 1 | Buy sportswear | Pending |\n| 2 | Review OpenClaw PR | In Progress |\n\nSource: workspace memory.'
-            }
+            },
+            { name: 'AGENDA-2026-March-1', content: 'Maratón prep and shopping list\n# Agenda - 2026-03-01' },
+            { name: 'AGENDA-2025-August-01', content: '# Agenda - 2025-08-01' },
+            { name: 'AGENDA-NO-DATE', content: 'manual note without parseable date' }
           ]),
           { status: 200 }
         )
@@ -153,6 +156,40 @@ describe('App', () => {
     expect(screen.getByRole('columnheader', { name: 'Task' })).toBeInTheDocument();
     expect(screen.getByText('Buy sportswear')).toBeInTheDocument();
     expect(screen.getByText('In Progress')).toBeInTheDocument();
+  });
+
+  it('shows agenda sorted newest first by default and allows oldest first', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('Agenda - 2026-03-06')).toBeInTheDocument());
+
+    const newest = screen.getByText('Agenda - 2026-03-06');
+    const undated = screen.getByText('AGENDA-NO-DATE');
+    expect(Boolean(newest.compareDocumentPosition(undated) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+    fireEvent.change(screen.getByDisplayValue('Most recent → oldest'), { target: { value: 'asc' } });
+
+    const oldest = screen.getByText('AGENDA-2025-August-01');
+    const newestAfterAsc = screen.getByText('Agenda - 2026-03-06');
+    expect(Boolean(oldest.compareDocumentPosition(newestAfterAsc) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getByText('Unknown date')).toBeInTheDocument();
+  });
+
+  it('filters agenda entries by keyword', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText('Search agenda by keyword...'), {
+      target: { value: 'maraton' }
+    });
+
+    expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2025-August-01')).not.toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {
