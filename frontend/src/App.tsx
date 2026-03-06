@@ -15,6 +15,75 @@ type Menu = (typeof menuItems)[number];
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 
+type ParsedAgenda = {
+  heading?: string;
+  headers: string[];
+  rows: string[][];
+  notes: string[];
+};
+
+function parseMarkdownTableRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+}
+
+function parseAgenda(content: string): ParsedAgenda {
+  const lines = content.split(/\r?\n/);
+  const heading = lines.find((line) => /^#\s+/.test(line))?.replace(/^#\s+/, '').trim();
+
+  let tableHeaderIndex = -1;
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    const current = lines[i].trim();
+    const next = lines[i + 1].trim();
+    if (current.includes('|') && /^\|?\s*:?-{3,}/.test(next)) {
+      tableHeaderIndex = i;
+      break;
+    }
+  }
+
+  if (tableHeaderIndex === -1) {
+    return {
+      heading,
+      headers: [],
+      rows: [],
+      notes: lines.filter((line) => line.trim() && !/^#\s+/.test(line)).map((line) => line.trim())
+    };
+  }
+
+  const headers = parseMarkdownTableRow(lines[tableHeaderIndex]);
+  const rows: string[][] = [];
+
+  for (let i = tableHeaderIndex + 2; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    if (!line.includes('|')) break;
+    rows.push(parseMarkdownTableRow(line));
+  }
+
+  const notes = lines
+    .slice(tableHeaderIndex + 2 + rows.length)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith('|'));
+
+  return { heading, headers, rows, notes };
+}
+
+function statusTone(status: string): string {
+  const normalized = status.toLowerCase();
+  if (normalized.includes('complete') || normalized.includes('done')) {
+    return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+  }
+  if (normalized.includes('progress')) {
+    return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+  }
+  return 'bg-slate-500/15 text-slate-200 border-slate-500/30';
+}
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<Menu>('Memory');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -429,17 +498,68 @@ export default function App() {
         )}
 
         {!loading && !error && activeMenu === 'Agenda' && (
-          <section className="space-y-3">
-            {agenda.map((entry) => (
-              <Card key={entry.name}>
-                <CardHeader>
-                  <CardTitle>{entry.name}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <pre className="whitespace-pre-wrap">{entry.content}</pre>
-                </CardContent>
-              </Card>
-            ))}
+          <section className="space-y-4">
+            {agenda.map((entry) => {
+              const parsed = parseAgenda(entry.content);
+              return (
+                <Card key={entry.name} className="overflow-hidden">
+                  <CardHeader className="pb-3 border-b border-border/70 bg-secondary/25">
+                    <CardTitle className="text-lg">{parsed.heading || entry.name}</CardTitle>
+                    {parsed.heading && <p className="text-xs text-muted-foreground">{entry.name}</p>}
+                  </CardHeader>
+
+                  <CardContent className="pt-4 space-y-4">
+                    {parsed.rows.length > 0 ? (
+                      <div className="overflow-x-auto rounded-md border border-border">
+                        <table className="w-full text-sm">
+                          <thead className="bg-secondary/35">
+                            <tr>
+                              {parsed.headers.map((header, idx) => (
+                                <th key={`${entry.name}-h-${idx}`} className="px-3 py-2 text-left font-semibold">
+                                  {header || `Column ${idx + 1}`}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {parsed.rows.map((row, rowIndex) => (
+                              <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60">
+                                {row.map((cell, cellIndex) => {
+                                  const isStatusCol = parsed.headers[cellIndex]?.toLowerCase().includes('status');
+                                  return (
+                                    <td key={`${entry.name}-c-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
+                                      {isStatusCol ? (
+                                        <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${statusTone(cell)}`}>
+                                          {cell}
+                                        </span>
+                                      ) : (
+                                        <span>{cell}</span>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-border bg-secondary/15 p-3">
+                        <pre className="whitespace-pre-wrap text-sm leading-relaxed">{entry.content}</pre>
+                      </div>
+                    )}
+
+                    {parsed.notes.length > 0 && (
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        {parsed.notes.map((note, idx) => (
+                          <p key={`${entry.name}-note-${idx}`}>{note}</p>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </section>
         )}
       </main>

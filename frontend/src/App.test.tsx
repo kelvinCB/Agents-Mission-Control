@@ -38,6 +38,21 @@ function mockFetchOk() {
       );
     }
 
+    if (String(url).includes('/api/agenda')) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([
+            {
+              name: 'AGENDA-2026-March-06',
+              content:
+                '# Agenda - 2026-03-06\n\n| # | Task | Status |\n|---|------|--------|\n| 1 | Buy sportswear | Pending |\n| 2 | Review OpenClaw PR | In Progress |\n\nSource: workspace memory.'
+            }
+          ]),
+          { status: 200 }
+        )
+      );
+    }
+
     return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
   });
 }
@@ -116,6 +131,18 @@ describe('App', () => {
 
     await waitFor(() => expect(screen.getByText('Memory files synced to GitHub main.')).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith('/api/memory/sync', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('renders agenda in a friendly table view', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('Agenda - 2026-03-06')).toBeInTheDocument());
+
+    expect(screen.getByRole('columnheader', { name: 'Task' })).toBeInTheDocument();
+    expect(screen.getByText('Buy sportswear')).toBeInTheDocument();
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {
