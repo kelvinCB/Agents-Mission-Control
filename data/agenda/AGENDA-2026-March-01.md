@@ -1,3 +1,0 @@
-- 07:30 Weekly goals setup
-- 12:00 Stakeholder update
-- 20:00 Daily close
