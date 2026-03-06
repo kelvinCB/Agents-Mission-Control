@@ -143,7 +143,7 @@ function parseAgenda(content: unknown): ParsedAgenda {
 }
 
 function statusTone(status: string): string {
-  const normalized = status.trim().toLowerCase();
+  const normalized = status.toLowerCase().replace(/\s+/g, ' ').trim();
   if (/\b(done|complete|completed)\b/.test(normalized)) {
     return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
   }
@@ -590,6 +590,7 @@ export default function App() {
                   {parsed.headers.length > 0 ? (
                     <div className="overflow-x-auto rounded-md border border-border">
                       <table className="w-full text-sm">
+                        <caption className="sr-only">{parsed.heading || entry.name} agenda table</caption>
                         <thead className="bg-secondary/35">
                           <tr>
                             {parsed.headers.map((header, idx) => (
@@ -601,24 +602,27 @@ export default function App() {
                         </thead>
                         <tbody>
                           {parsed.rows.length > 0 ? (
-                            parsed.rows.map((row, rowIndex) => (
-                              <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60">
-                                {row.map((cell, cellIndex) => {
-                                  const isStatusCol = /^status$/i.test(parsed.headers[cellIndex]?.trim() || '');
-                                  return (
-                                    <td key={`${entry.name}-c-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
-                                      {isStatusCol ? (
-                                        <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${statusTone(cell)}`}>
-                                          {cell}
-                                        </span>
-                                      ) : (
-                                        <span>{cell}</span>
-                                      )}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))
+                            parsed.rows.map((row, rowIndex) => {
+                              const rowSignature = row.join('|');
+                              return (
+                                <tr key={`${entry.name}-r-${rowIndex}-${rowSignature}`} className="border-t border-border/60">
+                                  {row.map((cell, cellIndex) => {
+                                    const isStatusCol = /^status$/i.test(parsed.headers[cellIndex]?.trim() || '');
+                                    return (
+                                      <td key={`${entry.name}-c-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
+                                        {isStatusCol ? (
+                                          <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${statusTone(cell)}`}>
+                                            {cell}
+                                          </span>
+                                        ) : (
+                                          <span>{cell}</span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })
                           ) : (
                             <tr className="border-t border-border/60">
                               <td colSpan={Math.max(parsed.headers.length, 1)} className="px-3 py-3 text-sm text-muted-foreground">
