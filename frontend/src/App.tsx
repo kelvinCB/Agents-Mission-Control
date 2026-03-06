@@ -31,13 +31,22 @@ const monthIndex: Record<string, number> = {
   december: 11,
 };
 
+function isValidUtcDateParts(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 0 || month > 11) return false;
+  if (day < 1 || day > 31) return false;
+
+  const date = new Date(Date.UTC(year, month, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day;
+}
+
 function extractAgendaDate(entry: AgendaEntry): Date | null {
   const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{1,2})$/i);
   if (nameMatch) {
     const year = Number(nameMatch[1]);
     const month = monthIndex[nameMatch[2].toLowerCase()];
     const day = Number(nameMatch[3]);
-    if (Number.isFinite(year) && month !== undefined && Number.isFinite(day)) {
+    if (month !== undefined && isValidUtcDateParts(year, month, day)) {
       return new Date(Date.UTC(year, month, day));
     }
   }
@@ -47,7 +56,7 @@ function extractAgendaDate(entry: AgendaEntry): Date | null {
     const year = Number(contentMatch[1]);
     const month = Number(contentMatch[2]) - 1;
     const day = Number(contentMatch[3]);
-    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+    if (isValidUtcDateParts(year, month, day)) {
       return new Date(Date.UTC(year, month, day));
     }
   }
@@ -501,6 +510,7 @@ export default function App() {
             <div className="flex justify-end">
               <Select
                 className="w-72"
+                aria-label="Agenda sort order"
                 value={agendaSortOrder}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -513,8 +523,8 @@ export default function App() {
                 <option value="asc">Oldest → most recent</option>
               </Select>
             </div>
-            {sortedAgenda.map(({ entry, date }) => (
-              <Card key={entry.name}>
+            {sortedAgenda.map(({ entry, date }, index) => (
+              <Card key={`${entry.name}-${index}`}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
                   {!date && <p className="text-xs text-muted-foreground">Unknown date</p>}
