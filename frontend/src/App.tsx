@@ -63,6 +63,11 @@ function parseMarkdownTableRow(line: string): string[] {
     current += ch;
   }
 
+  if (escaped) {
+    // Preserve trailing backslash when it is not escaping a supported token.
+    current += '\\';
+  }
+
   cells.push(current.trim());
   return cells;
 }
@@ -567,7 +572,7 @@ export default function App() {
                                 {row.map((cell, cellIndex) => {
                                   const isStatusCol = parsed.headers[cellIndex]?.toLowerCase().includes('status');
                                   return (
-                                    <td key={`${entry.name}-c-${rowIndex}-${cellIndex}-${cell}`} className="px-3 py-2 align-top">
+                                    <td key={`${entry.name}-c-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
                                       {isStatusCol ? (
                                         <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${statusTone(cell)}`}>
                                           {cell}
