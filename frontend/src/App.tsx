@@ -39,7 +39,12 @@ function parseMarkdownTableRow(line: string): string[] {
     }
 
     if (ch === '\\') {
-      escaped = true;
+      const next = normalized[i + 1];
+      if (next === '|' || next === '\\' || next === '`') {
+        escaped = true;
+      } else {
+        current += ch;
+      }
       continue;
     }
 
