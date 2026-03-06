@@ -49,8 +49,10 @@ function mockFetchOk() {
       return Promise.resolve(
         new Response(
           JSON.stringify([
-            { name: 'AGENDA-2026-March-01', content: 'Maratón prep and shopping list' },
-            { name: 'AGENDA-2026-March-02', content: 'OpenClaw PR reviews and cron updates' }
+            { name: 'AGENDA-2026-February-24', content: '# Agenda - 2026-02-24' },
+            { name: 'AGENDA-2026-March-1', content: 'Maratón prep and shopping list\n# Agenda - 2026-03-01' },
+            { name: 'AGENDA-2025-August-01', content: '# Agenda - 2025-08-01' },
+            { name: 'AGENDA-NO-DATE', content: 'manual note without parseable date' }
           ]),
           { status: 200 }
         )
@@ -137,19 +139,46 @@ describe('App', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/memory/sync', expect.objectContaining({ method: 'POST' }));
   });
 
+  it('shows agenda sorted newest first by default and allows oldest first', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument());
+
+    const agendaTitles = screen
+      .getAllByRole('heading', { level: 3 })
+      .map((el) => el.textContent)
+      .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
+
+    expect(agendaTitles[0]).toBe('AGENDA-2026-March-1');
+    expect(agendaTitles[agendaTitles.length - 1]).toBe('AGENDA-NO-DATE');
+
+    fireEvent.change(screen.getByDisplayValue('Most recent → oldest'), { target: { value: 'asc' } });
+
+    const ascTitles = screen
+      .getAllByRole('heading', { level: 3 })
+      .map((el) => el.textContent)
+      .filter((text): text is string => !!text && text.startsWith('AGENDA-'));
+
+    expect(ascTitles[0]).toBe('AGENDA-2025-August-01');
+    expect(ascTitles[ascTitles.length - 1]).toBe('AGENDA-NO-DATE');
+    expect(screen.getByText('Unknown date')).toBeInTheDocument();
+  });
+
   it('filters agenda entries by keyword', async () => {
     mockFetchOk();
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
-    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-01')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument());
 
     fireEvent.change(screen.getByPlaceholderText('Search agenda by keyword...'), {
       target: { value: 'maraton' }
     });
 
-    expect(screen.getByText('AGENDA-2026-March-01')).toBeInTheDocument();
-    expect(screen.queryByText('AGENDA-2026-March-02')).not.toBeInTheDocument();
+    expect(screen.getByText('AGENDA-2026-March-1')).toBeInTheDocument();
+    expect(screen.queryByText('AGENDA-2026-February-24')).not.toBeInTheDocument();
   });
 
   it('shows error when API request fails', async () => {

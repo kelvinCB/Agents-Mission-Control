@@ -8,6 +8,7 @@ type Project = { title: string; url: string; image: string; progress: number };
 type MemoryFile = { name: string; content: string };
 type MemoryGroup = { agent: string; files: MemoryFile[] };
 type AgendaEntry = { name: string; content: string };
+type AgendaSortOrder = 'desc' | 'asc';
 
 const menuItems = ['Memory', 'Projects', 'Agenda'] as const;
 type Menu = (typeof menuItems)[number];
@@ -19,12 +20,61 @@ function normalizeSearchText(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
+const monthIndex: Record<string, number> = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11,
+};
+
+function isValidUtcDateParts(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 0 || month > 11) return false;
+  if (day < 1 || day > 31) return false;
+
+  const date = new Date(Date.UTC(year, month, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day;
+}
+
+function extractAgendaDate(entry: AgendaEntry): Date | null {
+  const nameMatch = entry.name.match(/^AGENDA-(\d{4})-([A-Za-z]+)-(\d{1,2})$/i);
+  if (nameMatch) {
+    const year = Number(nameMatch[1]);
+    const month = monthIndex[nameMatch[2].toLowerCase()];
+    const day = Number(nameMatch[3]);
+    if (month !== undefined && isValidUtcDateParts(year, month, day)) {
+      return new Date(Date.UTC(year, month, day));
+    }
+  }
+
+  const contentMatch = entry.content.match(/#\s*Agenda\s*-\s*(\d{4})-(\d{2})-(\d{2})/i);
+  if (contentMatch) {
+    const year = Number(contentMatch[1]);
+    const month = Number(contentMatch[2]) - 1;
+    const day = Number(contentMatch[3]);
+    if (isValidUtcDateParts(year, month, day)) {
+      return new Date(Date.UTC(year, month, day));
+    }
+  }
+
+  return null;
+}
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<Menu>('Memory');
   const [projects, setProjects] = useState<Project[]>([]);
   const [memory, setMemory] = useState<MemoryGroup[]>([]);
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
   const [agendaSearch, setAgendaSearch] = useState('');
+  const [agendaSortOrder, setAgendaSortOrder] = useState<AgendaSortOrder>('desc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [memorySearch, setMemorySearch] = useState('');
@@ -117,6 +167,33 @@ export default function App() {
     const merged = new Set([...fromMemory, newMemoryAgent].filter(Boolean));
     return Array.from(merged).sort((a, b) => a.localeCompare(b));
   }, [memory, newMemoryAgent]);
+
+  const sortedFilteredAgenda = useMemo(() => {
+    const withDate = filteredAgenda.map(({ entry, index }) => ({
+      entry,
+      index,
+      date: extractAgendaDate(entry),
+    }));
+
+    withDate.sort((a, b) => {
+      const aHasDate = !!a.date;
+      const bHasDate = !!b.date;
+
+      if (aHasDate !== bHasDate) {
+        // Keep undated entries always at the end for both sort modes.
+        return aHasDate ? -1 : 1;
+      }
+
+      const aTime = a.date?.getTime() ?? 0;
+      const bTime = b.date?.getTime() ?? 0;
+      if (aTime === bTime) {
+        return a.index - b.index;
+      }
+      return agendaSortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+    });
+
+    return withDate;
+  }, [filteredAgenda, agendaSortOrder]);
 
   function toggleAgent(agent: string) {
     setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
@@ -452,7 +529,7 @@ export default function App() {
 
         {!loading && !error && activeMenu === 'Agenda' && (
           <section className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex flex-col md:flex-row gap-2 md:justify-end">
               <Input
                 className="w-full md:w-96"
                 placeholder="Search agenda by keyword..."
@@ -460,20 +537,35 @@ export default function App() {
                 value={agendaSearch}
                 onChange={(e) => setAgendaSearch(e.target.value)}
               />
+              <Select
+                className="w-full md:w-72"
+                aria-label="Agenda sort order"
+                value={agendaSortOrder}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === 'asc' || value === 'desc') {
+                    setAgendaSortOrder(value);
+                  }
+                }}
+              >
+                <option value="desc">Most recent → oldest</option>
+                <option value="asc">Oldest → most recent</option>
+              </Select>
             </div>
 
             {agenda.length === 0 && (
               <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries available yet.</p>
             )}
 
-            {agenda.length > 0 && agendaSearch.trim() && filteredAgenda.length === 0 && (
+            {agenda.length > 0 && agendaSearch.trim() && sortedFilteredAgenda.length === 0 && (
               <p className="text-sm text-muted-foreground" aria-live="polite">No agenda entries match your search.</p>
             )}
 
-            {filteredAgenda.map(({ entry, index }) => (
-              <Card key={`${entry.name}-${index}`}>
+            {sortedFilteredAgenda.map(({ entry, date, index: sourceIndex }) => (
+              <Card key={`${entry.name}-${sourceIndex}`}>
                 <CardHeader>
                   <CardTitle>{entry.name}</CardTitle>
+                  {!date && <p className="text-xs text-muted-foreground">Unknown date</p>}
                 </CardHeader>
                 <CardContent>
                   <pre className="whitespace-pre-wrap">{entry.content}</pre>
