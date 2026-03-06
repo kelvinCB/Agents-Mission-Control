@@ -147,7 +147,7 @@ function statusTone(status: string): string {
   if (/\b(done|complete|completed)\b/.test(normalized)) {
     return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
   }
-  if (/\b(in\s*progress|progress|ongoing)\b/.test(normalized)) {
+  if (/\b(in\s*progress|progress|ongoing|wip|doing|todo|deferred)\b/.test(normalized)) {
     return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
   }
   if (/\b(review|pending)\b/.test(normalized)) {
@@ -603,9 +603,8 @@ export default function App() {
                         <tbody>
                           {parsed.rows.length > 0 ? (
                             parsed.rows.map((row, rowIndex) => {
-                              const rowSignature = row.join('|');
                               return (
-                                <tr key={`${entry.name}-r-${rowIndex}-${rowSignature}`} className="border-t border-border/60">
+                                <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60">
                                   {row.map((cell, cellIndex) => {
                                     const isStatusCol = /^status$/i.test(parsed.headers[cellIndex]?.trim() || '');
                                     return (

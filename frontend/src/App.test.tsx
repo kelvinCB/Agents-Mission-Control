@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 function resolvePathname(url: RequestInfo | URL): string {
-  const rawUrl = typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
-  return new URL(rawUrl, 'http://localhost').pathname;
+  if (typeof url === 'string') return new URL(url, 'http://localhost').pathname;
+  if (typeof url === 'object' && url !== null && 'href' in url) {
+    return new URL(String((url as { href: string }).href), 'http://localhost').pathname;
+  }
+  return new URL((url as Request).url, 'http://localhost').pathname;
 }
 
 function mockFetchOk() {
