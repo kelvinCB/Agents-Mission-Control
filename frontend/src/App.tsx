@@ -98,6 +98,19 @@ type ParsedAgenda = {
   notes: string[];
 };
 
+function extractMemoryTimestamp(name: string): number | null {
+  const match = name.match(/^Memory-(\d{4})-(\d{2})-(\d{2})(?:-(\d{2})(\d{2}))?$/i);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const hour = match[4] ? Number(match[4]) : 0;
+  const minute = match[5] ? Number(match[5]) : 0;
+  if (!isValidUtcDateParts(year, month, day)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return Date.UTC(year, month, day, hour, minute, 0, 0);
+}
+
 function parseMarkdownTableRow(line: string): string[] {
   const normalized = line.trim().replace(/^\|/, '').replace(/\|$/, '');
   const cells: string[] = [];
@@ -304,15 +317,29 @@ export default function App() {
     return flattenedMemory.filter((m) => m.name.toLowerCase().includes(q) || m.agent.toLowerCase().includes(q) || m.content.toLowerCase().includes(q));
   }, [flattenedMemory, memorySearch]);
 
+  const sortedFilteredMemory = useMemo(() => {
+    const items = [...filteredMemory];
+    items.sort((a, b) => {
+      const aTs = extractMemoryTimestamp(a.name);
+      const bTs = extractMemoryTimestamp(b.name);
+      const aHas = aTs !== null;
+      const bHas = bTs !== null;
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      if (aTs !== null && bTs !== null && aTs !== bTs) return bTs - aTs;
+      return a.name.localeCompare(b.name);
+    });
+    return items;
+  }, [filteredMemory]);
+
   const groupedFilteredMemory = useMemo(() => {
-    return filteredMemory.reduce<Record<string, typeof filteredMemory>>((acc, item) => {
+    return sortedFilteredMemory.reduce<Record<string, typeof sortedFilteredMemory>>((acc, item) => {
       if (!acc[item.agent]) acc[item.agent] = [];
       acc[item.agent].push(item);
       return acc;
     }, {});
-  }, [filteredMemory]);
+  }, [sortedFilteredMemory]);
 
-  const selectedMemory = filteredMemory.find((f) => f.key === selectedMemoryKey) || filteredMemory[0];
+  const selectedMemory = sortedFilteredMemory.find((f) => f.key === selectedMemoryKey) || sortedFilteredMemory[0];
 
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
