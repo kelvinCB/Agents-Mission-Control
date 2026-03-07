@@ -41,7 +41,14 @@ function mockFetchOk() {
         new Response(
           JSON.stringify([
             { agent: 'Etiven', files: [{ name: 'main-memory', content: 'hello world' }] },
-            { agent: 'Maggi', files: [{ name: 'Memory-2026-03-03', content: 'notes' }] }
+            {
+              agent: 'Maggi',
+              files: [
+                { name: 'Memory-2026-02-06', content: 'older note' },
+                { name: 'Memory-2026-03-06', content: 'latest note' },
+                { name: 'Memory-2026-02-13-2245', content: 'mid note with time' }
+              ]
+            }
           ]),
           { status: 200 }
         )
@@ -104,6 +111,24 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText('Drag & drop .md files here')).toBeInTheDocument());
+  });
+
+  it('shows agent memories sorted newest to oldest', async () => {
+    mockFetchOk();
+    render(<App />);
+
+    await waitFor(() => expect(screen.getAllByTestId('memory-file-button').length).toBeGreaterThan(0));
+
+    const orderedMemoryTitles = screen
+      .getAllByTestId('memory-file-button')
+      .map((el) => (el.textContent || '').match(/Memory-\d{4}-\d{2}-\d{2}(?:-\d{4})?\.md/)?.[0] || '')
+      .filter((text) => text.startsWith('Memory-2026-'));
+
+    expect(orderedMemoryTitles.slice(0, 3)).toEqual([
+      'Memory-2026-03-06.md',
+      'Memory-2026-02-13-2245.md',
+      'Memory-2026-02-06.md'
+    ]);
   });
 
   it('renames selected memory title', async () => {
