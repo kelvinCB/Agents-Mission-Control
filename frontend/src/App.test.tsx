@@ -117,10 +117,10 @@ describe('App', () => {
     mockFetchOk();
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText('Memory-2026-03-06.md')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByTestId('memory-file-button').length).toBeGreaterThan(0));
 
     const orderedMemoryTitles = screen
-      .getAllByRole('button')
+      .getAllByTestId('memory-file-button')
       .map((el) => (el.textContent || '').match(/Memory-\d{4}-\d{2}-\d{2}(?:-\d{4})?\.md/)?.[0] || '')
       .filter((text) => text.startsWith('Memory-2026-'));
 

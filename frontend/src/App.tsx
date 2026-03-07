@@ -99,7 +99,8 @@ type ParsedAgenda = {
 };
 
 function extractMemoryTimestamp(name: string): number | null {
-  const match = name.match(/^Memory-(\d{4})-(\d{2})-(\d{2})(?:-(\d{2})(\d{2}))?$/i);
+  const normalized = name.replace(/\.md$/i, '');
+  const match = normalized.match(/^Memory-(\d{4})-(\d{2})-(\d{2})(?:-(\d{2})(\d{2}))?$/i);
   if (!match) return null;
   const year = Number(match[1]);
   const month = Number(match[2]) - 1;
@@ -301,8 +302,20 @@ export default function App() {
       setMemory(memoryData);
       setAgenda(agendaData);
       setOpenAgents(Object.fromEntries(memoryData.map((group) => [group.agent, true])));
-      const first = memoryData?.[0];
-      if (first?.files?.[0]) setSelectedMemoryKey(`${first.agent}/${first.files[0].name}`);
+
+      const allMemoryFiles = memoryData.flatMap((group) =>
+        group.files.map((file) => ({ agent: group.agent, name: file.name, key: `${group.agent}/${file.name}` })),
+      );
+      const initial = [...allMemoryFiles].sort((a, b) => {
+        const aTs = extractMemoryTimestamp(a.name);
+        const bTs = extractMemoryTimestamp(b.name);
+        const aHas = aTs !== null;
+        const bHas = bTs !== null;
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        if (aTs !== null && bTs !== null && aTs !== bTs) return bTs - aTs;
+        return a.name.localeCompare(b.name);
+      })[0];
+      if (initial) setSelectedMemoryKey(initial.key);
     } catch {
       setError('Unable to load Mission Control data. Please retry.');
     } finally {
@@ -318,6 +331,7 @@ export default function App() {
   }, [flattenedMemory, memorySearch]);
 
   const sortedFilteredMemory = useMemo(() => {
+    // Sort: newest dated memory first -> oldest dated memory -> undated alphabetically.
     const items = [...filteredMemory];
     items.sort((a, b) => {
       const aTs = extractMemoryTimestamp(a.name);
@@ -339,7 +353,7 @@ export default function App() {
     }, {});
   }, [sortedFilteredMemory]);
 
-  const selectedMemory = sortedFilteredMemory.find((f) => f.key === selectedMemoryKey) || sortedFilteredMemory[0];
+  const selectedMemory = sortedFilteredMemory.find((f) => f.key === selectedMemoryKey) ?? sortedFilteredMemory[0] ?? null;
 
   const agentOptions = useMemo(() => {
     const fromMemory = Array.from(new Set(memory.map((group) => group.agent)));
@@ -638,6 +652,7 @@ export default function App() {
                         {files.map((file) => (
                           <Button
                             key={file.key}
+                            data-testid="memory-file-button"
                             variant={selectedMemory?.key === file.key ? 'default' : 'secondary'}
                             className="w-full justify-start h-auto py-2"
                             onClick={() => setSelectedMemoryKey(file.key)}
