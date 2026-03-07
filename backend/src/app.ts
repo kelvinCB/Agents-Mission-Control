@@ -36,7 +36,7 @@ const dataDir = process.env.DATA_DIR || path.join(rootDir, 'data');
 type Project = { title: string; url: string; image: string; progress: number };
 const projects: Project[] = [
   { title: 'Task_Manager', url: 'https://kolium.com', image: 'https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?auto=format&fit=crop&w=1200&q=80', progress: 100 },
-  { title: 'VPS-Visual-Dashboard', url: 'https://kelvin-vps.site', image: 'https://images.unsplash.com/photo-1551281044-8b5bd5f8f8f6?auto=format&fit=crop&w=1200&q=80', progress: 100 },
+  { title: 'VPS-Visual-Dashboard', url: 'https://kelvin-vps.site', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80', progress: 100 },
   { title: 'TerranovaEcommerce', url: 'https://terranovaecommerce.com', image: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80', progress: 100 }
 ];
 
