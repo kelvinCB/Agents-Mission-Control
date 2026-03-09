@@ -586,7 +586,6 @@ export default function App() {
           <img src="/brand/logo.svg" alt="Mission Control logo" className="h-8 w-8" />
           <h2 className="text-xl font-semibold tracking-tight">Mission Control</h2>
         </div>
-        <p className="text-xs text-muted-foreground mb-4">Memory · Projects · Agenda</p>
         <nav className="space-y-2">
           {menuItems.map((item) => (
             <Button key={item} variant={activeMenu === item ? 'default' : 'outline'} className="w-full justify-start" onClick={() => setActiveMenu(item)}>
