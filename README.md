@@ -24,5 +24,10 @@ npx playwright test
 - Agent memories are loaded from `data/memory/<AgentName>/*.md`
 - Agenda files are loaded from `data/agenda/*.md`
 
+## UI/UX Standard (Mandatory)
+- This repo enforces **Uncodixfy** for all frontend UI/UX changes.
+- Skill is installed at `.agents/skills/uncodixfy`.
+- Project-level enforcement notes live in `AGENTS.md`.
+
 ## Production
 See `DEPLOYMENT.md` for VPS + Vercel deployment steps (`kelvin-control.site`).

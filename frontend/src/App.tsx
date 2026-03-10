@@ -241,7 +241,7 @@ function statusTone(status: string): string {
     return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
   }
   if (/\b(review|pending)\b/.test(normalized)) {
-    return 'bg-blue-500/15 text-blue-300 border-blue-500/30';
+    return 'bg-orange-500/15 text-orange-300 border-orange-500/30';
   }
   if (/\b(cancelled|canceled|blocked|on\s*hold|won't\s*do|wont\s*do)\b/.test(normalized)) {
     return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
@@ -580,13 +580,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground grid grid-cols-1 md:grid-cols-[240px_1fr]">
-      <aside className="border-b md:border-b-0 md:border-r border-border p-4 bg-card/80 backdrop-blur-sm">
+    <div className="min-h-screen bg-background text-foreground grid grid-cols-1 md:grid-cols-[248px_1fr]">
+      <aside className="border-b md:border-b-0 md:border-r border-border p-4 bg-card">
         <div className="flex items-center gap-3 mb-1">
           <img src="/brand/logo.svg" alt="Mission Control logo" className="h-8 w-8" />
           <h2 className="text-xl font-semibold tracking-tight">Mission Control</h2>
         </div>
-        <nav className="space-y-2">
+        <nav className="space-y-1">
           {menuItems.map((item) => (
             <Button key={item} variant={activeMenu === item ? 'default' : 'outline'} className="w-full justify-start" onClick={() => setActiveMenu(item)}>
               {item}
@@ -595,9 +595,9 @@ export default function App() {
         </nav>
       </aside>
 
-      <main className="p-4 md:p-6">
-        <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 mb-4">
-          <h1 className="text-2xl font-semibold tracking-tight">Agents Mission Control</h1>
+      <main className="p-4 md:p-5">
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 mb-4 border-b border-border pb-3">
+          <h1 className="text-xl font-semibold tracking-tight">Agents Mission Control</h1>
           {activeMenu === 'Memory' && <Input className="w-80" placeholder="Search memory..." value={memorySearch} onChange={(e) => setMemorySearch(e.target.value)} />}
         </div>
 
@@ -605,16 +605,16 @@ export default function App() {
         {error && <p className="text-red-400">{error}</p>}
 
         {!loading && !error && activeMenu === 'Projects' && (
-          <section className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+          <section className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
             {projects.map((project) => (
               <Card key={project.title}>
                 <CardHeader>
-                  <img src={project.image} alt={`${project.title} visual`} className="w-full h-36 object-cover rounded-lg" />
+                  <img src={project.image} alt={`${project.title} visual`} className="w-full h-36 object-cover rounded-md border border-border" />
                   <CardTitle>{project.title}</CardTitle>
-                  <a href={project.url} target="_blank" rel="noreferrer noopener" className="text-sky-300 text-sm">{project.url}</a>
+                  <a href={project.url} target="_blank" rel="noreferrer noopener" className="text-primary text-sm">{project.url}</a>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-3 rounded-full bg-secondary"><div className="h-3 rounded-full bg-green-500" style={{ width: `${project.progress}%` }} /></div>
+                  <div className="h-2 rounded-sm bg-secondary"><div className="h-2 rounded-sm bg-primary" style={{ width: `${project.progress}%` }} /></div>
                   <p className="text-sm text-muted-foreground mt-1">{project.progress}% complete</p>
                 </CardContent>
               </Card>
@@ -631,12 +631,12 @@ export default function App() {
             </div>
             {syncMessage && <p className="text-sm text-muted-foreground text-right">{syncMessage}</p>}
 
-            <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr_360px] gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr_360px] gap-3">
             <Card className="p-2 max-h-[76vh] overflow-auto">
               {Object.entries(groupedFilteredMemory).map(([agent, files]) => {
                 const isOpen = openAgents[agent] ?? true;
                 return (
-                  <div key={agent} className="mb-2 rounded-md border border-border bg-secondary/30">
+                  <div key={agent} className="mb-2 rounded-md border border-border bg-card">
                     <button
                       type="button"
                       onClick={() => toggleAgent(agent)}
@@ -821,7 +821,7 @@ export default function App() {
                     <div className="overflow-x-auto rounded-md border border-border">
                       <table className="w-full text-sm">
                         <caption className="sr-only">{parsed.heading || entry.name} agenda table</caption>
-                        <thead className="bg-secondary/35">
+                        <thead className="bg-secondary">
                           <tr>
                             {parsed.headers.map((header, idx) => (
                               <th scope="col" key={`${entry.name}-h-${idx}`} className="px-3 py-2 text-left font-semibold">
@@ -834,13 +834,13 @@ export default function App() {
                           {parsed.rows.length > 0 ? (
                             parsed.rows.map((row, rowIndex) => {
                               return (
-                                <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60">
+                                                <tr key={`${entry.name}-r-${rowIndex}`} className="border-t border-border/60 hover:bg-secondary/25">
                                   {row.map((cell, cellIndex) => {
                                     const isStatusCol = /^status$/i.test(parsed.headers[cellIndex]?.trim() || '');
                                     return (
                                       <td key={`${entry.name}-c-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
                                         {isStatusCol ? (
-                                          <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-medium ${statusTone(cell)}`}>
+                                          <span className={`inline-flex px-2 py-0.5 rounded-md border text-xs font-medium ${statusTone(cell)}`}>
                                             {cell}
                                           </span>
                                         ) : (
@@ -863,7 +863,7 @@ export default function App() {
                       </table>
                     </div>
                   ) : (
-                    <div className="rounded-md border border-border bg-secondary/15 p-3">
+                    <div className="rounded-md border border-border bg-card p-3">
                       <pre className="whitespace-pre-wrap text-sm leading-relaxed">{entry.content}</pre>
                     </div>
                   )}
@@ -883,7 +883,7 @@ export default function App() {
       </main>
 
       {showAddAgentModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>Add Agent</CardTitle>
@@ -911,7 +911,7 @@ export default function App() {
       )}
 
       {showRenameModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>Edit Memory Title</CardTitle>
@@ -939,7 +939,7 @@ export default function App() {
       )}
 
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>Delete Memory File</CardTitle>
