@@ -7,7 +7,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 4000,
-        CORS_ORIGINS: 'https://kelvin-control.site,https://www.kelvin-control.site,https://app.kelvin-control.site',
+        CORS_ORIGINS: '',
         ENABLE_GOOGLE_CALENDAR_MODULE: 'true',
         GOOGLE_CALENDAR_SCRIPT: '/home/kelvin/.clawdbot/workspace/scripts/google-calendar/gcal.js'
       }
