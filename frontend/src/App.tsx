@@ -9,8 +9,10 @@ type MemoryFile = { name: string; content: string };
 type MemoryGroup = { agent: string; files: MemoryFile[] };
 type AgendaEntry = { name: string; content: string };
 type AgendaSortOrder = 'desc' | 'asc';
+type CalendarEvent = { id: string; title: string; start: string; end: string; allDay: boolean };
+type CalendarResponse = { year: number; month: number; events: CalendarEvent[] };
 
-const menuItems = ['Memory', 'Projects', 'Agenda'] as const;
+const menuItems = ['Memory', 'Projects', 'Agenda', 'Calendar'] as const;
 type Menu = (typeof menuItems)[number];
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '';
@@ -232,6 +234,23 @@ function parseAgenda(content: unknown): ParsedAgenda {
   return { heading, headers, rows, notes };
 }
 
+function formatMonthLabel(year: number, month: number): string {
+  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+function formatCalendarDateTime(value: string, allDay: boolean, exclusiveEnd = false): string {
+  if (allDay) {
+    const date = new Date(`${value}T00:00:00Z`);
+    if (exclusiveEnd) {
+      date.setUTCDate(date.getUTCDate() - 1);
+    }
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
+  }
+
+  const date = new Date(value);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
 function statusTone(status: string): string {
   const normalized = status.toLowerCase().replace(/\s+/g, ' ').trim();
   if (/\b(done|complete|completed)\b/.test(normalized)) {
@@ -254,6 +273,9 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [memory, setMemory] = useState<MemoryGroup[]>([]);
   const [agenda, setAgenda] = useState<AgendaEntry[]>([]);
+  const [calendarData, setCalendarData] = useState<CalendarResponse>({ year: 2026, month: 3, events: [] });
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState('');
   const [agendaSearch, setAgendaSearch] = useState('');
   const [agendaSortOrder, setAgendaSortOrder] = useState<AgendaSortOrder>('desc');
   const [agendaFromDate, setAgendaFromDate] = useState('');
@@ -284,8 +306,26 @@ export default function App() {
   const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
+    const now = new Date();
+    setCalendarData((prev) => ({ ...prev, year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 }));
     void loadAllData();
+    void loadCalendar(now.getUTCFullYear(), now.getUTCMonth() + 1);
   }, []);
+
+  async function loadCalendar(year: number, month: number) {
+    try {
+      setCalendarLoading(true);
+      setCalendarError('');
+      const res = await fetch(apiUrl(`/api/calendar?year=${year}&month=${month}`));
+      const data = (await res.json()) as CalendarResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error || 'request failed');
+      setCalendarData(data);
+    } catch {
+      setCalendarError('Unable to load Google Calendar events for this month.');
+    } finally {
+      setCalendarLoading(false);
+    }
+  }
 
   async function loadAllData() {
     try {
@@ -422,6 +462,11 @@ export default function App() {
 
   function toggleAgent(agent: string) {
     setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
+  }
+
+  function shiftCalendarMonth(offset: number) {
+    const date = new Date(Date.UTC(calendarData.year, calendarData.month - 1 + offset, 1));
+    void loadCalendar(date.getUTCFullYear(), date.getUTCMonth() + 1);
   }
 
   function handleAddAgent() {
@@ -878,6 +923,63 @@ export default function App() {
                 </CardContent>
               </Card>
             ))}
+          </section>
+        )}
+
+        {!loading && !error && activeMenu === 'Calendar' && (
+          <section className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">{formatMonthLabel(calendarData.year, calendarData.month)}</h2>
+                <p className="text-sm text-muted-foreground">Eventos traídos desde Google Calendar API.</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => shiftCalendarMonth(-1)} disabled={calendarLoading}>
+                  Mes anterior
+                </Button>
+                <Button variant="outline" onClick={() => void loadCalendar(calendarData.year, calendarData.month)} disabled={calendarLoading}>
+                  {calendarLoading ? 'Cargando...' : 'Recargar'}
+                </Button>
+                <Button variant="outline" onClick={() => shiftCalendarMonth(1)} disabled={calendarLoading}>
+                  Mes siguiente
+                </Button>
+              </div>
+            </div>
+
+            {calendarError && <p className="text-sm text-rose-400">{calendarError}</p>}
+
+            {!calendarError && calendarData.events.length === 0 && !calendarLoading && (
+              <p className="text-sm text-muted-foreground">No hay eventos para este mes.</p>
+            )}
+
+            {!calendarError && calendarData.events.length > 0 && (
+              <Card className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-secondary border-b border-border">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">Título</th>
+                          <th className="px-3 py-2 text-left font-semibold">Inicio</th>
+                          <th className="px-3 py-2 text-left font-semibold">Fin</th>
+                          <th className="px-3 py-2 text-left font-semibold">Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {calendarData.events.map((event) => (
+                          <tr key={event.id} className="border-t border-border/60">
+                            <td className="px-3 py-2 align-top">{event.title}</td>
+                            <td className="px-3 py-2 align-top">{formatCalendarDateTime(event.start, event.allDay)}</td>
+                            <td className="px-3 py-2 align-top">{formatCalendarDateTime(event.end, event.allDay, event.allDay)}</td>
+                            <td className="px-3 py-2 align-top">{event.allDay ? 'All day' : 'Timed'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </section>
         )}
       </main>

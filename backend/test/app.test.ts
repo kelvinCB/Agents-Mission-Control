@@ -1,6 +1,21 @@
+import os from 'node:os';
+import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import app from '../src/app';
+
+const tempPaths: string[] = [];
+
+afterAll(async () => {
+  await Promise.all(tempPaths.map(async (target) => {
+    try {
+      await fs.rm(target, { recursive: true, force: true });
+    } catch {
+      // noop
+    }
+  }));
+});
 
 describe('api', () => {
   it('returns projects', async () => {
@@ -75,5 +90,72 @@ describe('api', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+
+  it('returns calendar events from the configured Google Calendar script', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mission-control-calendar-'));
+    tempPaths.push(tempDir);
+    const fakeScript = path.join(tempDir, 'gcal.js');
+    const previousScript = process.env.GOOGLE_CALENDAR_SCRIPT;
+    const previousEnabled = process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+
+    await fs.writeFile(
+      fakeScript,
+      [
+        '#!/usr/bin/env node',
+        "console.log('event-1');",
+        "console.log('  2026-03-23T09:00:00-04:00 -> 2026-03-23T10:00:00-04:00');",
+        "console.log('  Desayunar');",
+        "console.log('');",
+        "console.log('event-2');",
+        "console.log('  2026-03-24 -> 2026-03-25');",
+        "console.log('  Cumpleaños');",
+      ].join('\n'),
+      'utf8'
+    );
+    await fs.writeFile(path.join(tempDir, 'credentials.json'), '{}', 'utf8');
+    await fs.writeFile(path.join(tempDir, 'token.json'), '{}', 'utf8');
+
+    process.env.GOOGLE_CALENDAR_SCRIPT = fakeScript;
+    process.env.ENABLE_GOOGLE_CALENDAR_MODULE = 'true';
+
+    try {
+      const res = await request(app).get('/api/calendar?year=2026&month=3');
+
+      expect(res.status).toBe(200);
+      expect(res.body.year).toBe(2026);
+      expect(res.body.month).toBe(3);
+      expect(Array.isArray(res.body.events)).toBe(true);
+      expect(res.body.events).toHaveLength(2);
+      expect(res.body.events[0]).toMatchObject({
+        id: 'event-1',
+        title: 'Desayunar',
+        allDay: false,
+      });
+      expect(res.body.events[1]).toMatchObject({
+        id: 'event-2',
+        title: 'Cumpleaños',
+        allDay: true,
+      });
+    } finally {
+      if (previousScript === undefined) delete process.env.GOOGLE_CALENDAR_SCRIPT;
+      else process.env.GOOGLE_CALENDAR_SCRIPT = previousScript;
+      if (previousEnabled === undefined) delete process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+      else process.env.ENABLE_GOOGLE_CALENDAR_MODULE = previousEnabled;
+    }
+  });
+
+  it('returns 503 when the calendar module is disabled', async () => {
+    const previousEnabled = process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+    delete process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+
+    try {
+      const res = await request(app).get('/api/calendar?year=2026&month=3');
+      expect(res.status).toBe(503);
+      expect(res.body.error).toContain('disabled');
+    } finally {
+      if (previousEnabled === undefined) delete process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+      else process.env.ENABLE_GOOGLE_CALENDAR_MODULE = previousEnabled;
+    }
   });
 });
