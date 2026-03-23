@@ -322,6 +322,16 @@ export default function App() {
     void loadCalendar(now.getUTCFullYear(), now.getUTCMonth() + 1);
   }, []);
 
+  useEffect(() => {
+    if (activeMenu !== 'Calendar') return;
+
+    const timer = window.setInterval(() => {
+      void loadCalendar(calendarData.year, calendarData.month);
+    }, 60000);
+
+    return () => window.clearInterval(timer);
+  }, [activeMenu, calendarData.year, calendarData.month]);
+
   async function loadCalendar(year: number, month: number) {
     try {
       setCalendarLoading(true);
@@ -1003,12 +1013,12 @@ export default function App() {
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">{formatMonthLabel(calendarData.year, calendarData.month)}</h2>
-                <p className="text-sm text-muted-foreground">Eventos leídos y creados desde Google Calendar API.</p>
+                <p className="text-sm text-muted-foreground">Eventos leídos y creados desde Google Calendar API. Puedes sincronizar manualmente o esperar el auto-refresh de 1 minuto.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => shiftCalendarMonth(-1)} disabled={calendarLoading}>Mes anterior</Button>
                 <Button variant="outline" onClick={() => void loadCalendar(calendarData.year, calendarData.month)} disabled={calendarLoading}>
-                  {calendarLoading ? 'Cargando...' : 'Recargar'}
+                  {calendarLoading ? 'Sincronizando...' : 'Sincronizar ahora'}
                 </Button>
                 <Button variant="outline" onClick={() => shiftCalendarMonth(1)} disabled={calendarLoading}>Mes siguiente</Button>
               </div>
