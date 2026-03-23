@@ -145,9 +145,46 @@ describe('api', () => {
     }
   });
 
+  it('creates a calendar event through the configured script', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mission-control-calendar-create-'));
+    tempPaths.push(tempDir);
+    const fakeScript = path.join(tempDir, 'gcal.js');
+    const previousScript = process.env.GOOGLE_CALENDAR_SCRIPT;
+    const previousEnabled = process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+
+    await fs.writeFile(
+      fakeScript,
+      [
+        '#!/usr/bin/env node',
+        "console.log('Created: https://calendar.test/event/123');",
+      ].join('\n'),
+      'utf8'
+    );
+    await fs.writeFile(path.join(tempDir, 'credentials.json'), '{}', 'utf8');
+    await fs.writeFile(path.join(tempDir, 'token.json'), '{}', 'utf8');
+
+    process.env.GOOGLE_CALENDAR_SCRIPT = fakeScript;
+    process.env.ENABLE_GOOGLE_CALENDAR_MODULE = 'true';
+
+    try {
+      const res = await request(app)
+        .post('/api/calendar/events')
+        .send({ title: 'Gym', start: '2026-03-23T17:00', end: '2026-03-23T18:00' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.link).toContain('calendar.test/event/123');
+    } finally {
+      if (previousScript === undefined) delete process.env.GOOGLE_CALENDAR_SCRIPT;
+      else process.env.GOOGLE_CALENDAR_SCRIPT = previousScript;
+      if (previousEnabled === undefined) delete process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+      else process.env.ENABLE_GOOGLE_CALENDAR_MODULE = previousEnabled;
+    }
+  });
+
   it('returns 503 when the calendar module is disabled', async () => {
     const previousEnabled = process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
-    delete process.env.ENABLE_GOOGLE_CALENDAR_MODULE;
+    process.env.ENABLE_GOOGLE_CALENDAR_MODULE = 'false';
 
     try {
       const res = await request(app).get('/api/calendar?year=2026&month=3');

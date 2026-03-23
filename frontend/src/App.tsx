@@ -11,6 +11,7 @@ type AgendaEntry = { name: string; content: string };
 type AgendaSortOrder = 'desc' | 'asc';
 type CalendarEvent = { id: string; title: string; start: string; end: string; allDay: boolean };
 type CalendarResponse = { year: number; month: number; events: CalendarEvent[] };
+type CalendarView = 'month' | 'week' | 'day';
 
 const menuItems = ['Memory', 'Projects', 'Agenda', 'Calendar'] as const;
 type Menu = (typeof menuItems)[number];
@@ -276,6 +277,15 @@ export default function App() {
   const [calendarData, setCalendarData] = useState<CalendarResponse>({ year: 2026, month: 3, events: [] });
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState('');
+  const [calendarView, setCalendarView] = useState<CalendarView>('month');
+  const [calendarSearch, setCalendarSearch] = useState('');
+  const [calendarActionMessage, setCalendarActionMessage] = useState('');
+  const [calendarCreating, setCalendarCreating] = useState(false);
+  const [newCalendarTitle, setNewCalendarTitle] = useState('');
+  const [newCalendarStart, setNewCalendarStart] = useState('');
+  const [newCalendarEnd, setNewCalendarEnd] = useState('');
+  const [newCalendarLocation, setNewCalendarLocation] = useState('');
+  const [newCalendarDescription, setNewCalendarDescription] = useState('');
   const [agendaSearch, setAgendaSearch] = useState('');
   const [agendaSortOrder, setAgendaSortOrder] = useState<AgendaSortOrder>('desc');
   const [agendaFromDate, setAgendaFromDate] = useState('');
@@ -317,13 +327,51 @@ export default function App() {
       setCalendarLoading(true);
       setCalendarError('');
       const res = await fetch(apiUrl(`/api/calendar?year=${year}&month=${month}`));
-      const data = (await res.json()) as CalendarResponse & { error?: string };
+      const data = (await res.json()) as Partial<CalendarResponse> & { error?: string };
       if (!res.ok) throw new Error(data.error || 'request failed');
-      setCalendarData(data);
-    } catch {
-      setCalendarError('Unable to load Google Calendar events for this month.');
+      setCalendarData({
+        year: data.year ?? year,
+        month: data.month ?? month,
+        events: Array.isArray(data.events) ? data.events : [],
+      });
+    } catch (error) {
+      setCalendarError(error instanceof Error ? error.message : 'Unable to load Google Calendar events for this month.');
     } finally {
       setCalendarLoading(false);
+    }
+  }
+
+  async function handleCreateCalendarEvent(e: FormEvent) {
+    e.preventDefault();
+    setCalendarActionMessage('');
+
+    try {
+      setCalendarCreating(true);
+      const res = await fetch(apiUrl('/api/calendar/events'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newCalendarTitle,
+          start: newCalendarStart,
+          end: newCalendarEnd,
+          location: newCalendarLocation,
+          description: newCalendarDescription,
+        })
+      });
+      const data = (await res.json()) as { error?: string; link?: string };
+      if (!res.ok) throw new Error(data.error || 'Failed to create calendar event.');
+
+      setCalendarActionMessage(data.link ? `Evento creado. ${data.link}` : 'Evento creado.');
+      setNewCalendarTitle('');
+      setNewCalendarStart('');
+      setNewCalendarEnd('');
+      setNewCalendarLocation('');
+      setNewCalendarDescription('');
+      await loadCalendar(calendarData.year, calendarData.month);
+    } catch (error) {
+      setCalendarActionMessage(error instanceof Error ? error.message : 'Failed to create calendar event.');
+    } finally {
+      setCalendarCreating(false);
     }
   }
 
@@ -459,6 +507,30 @@ export default function App() {
     () => sortedFilteredAgenda.map(({ entry, index, date }) => ({ entry, index, date, parsed: parseAgenda(entry.content) })),
     [sortedFilteredAgenda],
   );
+
+  const visibleCalendarEvents = useMemo(() => {
+    const monthDate = new Date(Date.UTC(calendarData.year, calendarData.month - 1, 1));
+    const search = normalizeSearchText(calendarSearch.trim());
+    const startOfDay = new Date(monthDate);
+    const endOfDay = new Date(monthDate);
+    endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+    const startOfWeek = new Date(monthDate);
+    const day = startOfWeek.getUTCDay();
+    const delta = day === 0 ? -6 : 1 - day;
+    startOfWeek.setUTCDate(startOfWeek.getUTCDate() + delta);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setUTCDate(endOfWeek.getUTCDate() + 7);
+
+    const events = Array.isArray(calendarData.events) ? calendarData.events : [];
+
+    return events.filter((event) => {
+      const start = event.allDay ? new Date(`${event.start}T00:00:00Z`) : new Date(event.start);
+      if (search && !normalizeSearchText(event.title).includes(search)) return false;
+      if (calendarView === 'day') return start >= startOfDay && start < endOfDay;
+      if (calendarView === 'week') return start >= startOfWeek && start < endOfWeek;
+      return true;
+    });
+  }, [calendarData, calendarSearch, calendarView]);
 
   function toggleAgent(agent: string) {
     setOpenAgents((prev) => ({ ...prev, [agent]: !prev[agent] }));
@@ -928,58 +1000,93 @@ export default function App() {
 
         {!loading && !error && activeMenu === 'Calendar' && (
           <section className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">{formatMonthLabel(calendarData.year, calendarData.month)}</h2>
-                <p className="text-sm text-muted-foreground">Eventos traídos desde Google Calendar API.</p>
+                <p className="text-sm text-muted-foreground">Eventos leídos y creados desde Google Calendar API.</p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => shiftCalendarMonth(-1)} disabled={calendarLoading}>
-                  Mes anterior
-                </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => shiftCalendarMonth(-1)} disabled={calendarLoading}>Mes anterior</Button>
                 <Button variant="outline" onClick={() => void loadCalendar(calendarData.year, calendarData.month)} disabled={calendarLoading}>
                   {calendarLoading ? 'Cargando...' : 'Recargar'}
                 </Button>
-                <Button variant="outline" onClick={() => shiftCalendarMonth(1)} disabled={calendarLoading}>
-                  Mes siguiente
-                </Button>
+                <Button variant="outline" onClick={() => shiftCalendarMonth(1)} disabled={calendarLoading}>Mes siguiente</Button>
               </div>
             </div>
 
-            {calendarError && <p className="text-sm text-rose-400">{calendarError}</p>}
-
-            {!calendarError && calendarData.events.length === 0 && !calendarLoading && (
-              <p className="text-sm text-muted-foreground">No hay eventos para este mes.</p>
-            )}
-
-            {!calendarError && calendarData.events.length > 0 && (
-              <Card className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-secondary border-b border-border">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-semibold">Título</th>
-                          <th className="px-3 py-2 text-left font-semibold">Inicio</th>
-                          <th className="px-3 py-2 text-left font-semibold">Fin</th>
-                          <th className="px-3 py-2 text-left font-semibold">Tipo</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {calendarData.events.map((event) => (
-                          <tr key={event.id} className="border-t border-border/60">
-                            <td className="px-3 py-2 align-top">{event.title}</td>
-                            <td className="px-3 py-2 align-top">{formatCalendarDateTime(event.start, event.allDay)}</td>
-                            <td className="px-3 py-2 align-top">{formatCalendarDateTime(event.end, event.allDay, event.allDay)}</td>
-                            <td className="px-3 py-2 align-top">{event.allDay ? 'All day' : 'Timed'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-[220px_220px_1fr] gap-2">
+                  <Select value={calendarView} onChange={(e) => setCalendarView(e.target.value as CalendarView)}>
+                    <option value="month">Mes</option>
+                    <option value="week">Semana</option>
+                    <option value="day">Día</option>
+                  </Select>
+                  <div className="text-sm text-muted-foreground border border-border rounded-md px-3 py-2 bg-card">
+                    {visibleCalendarEvents.length} evento(s)
                   </div>
+                  <Input
+                    value={calendarSearch}
+                    onChange={(e) => setCalendarSearch(e.target.value)}
+                    placeholder="Buscar por título..."
+                  />
+                </div>
+
+                {calendarError && <p className="text-sm text-rose-400">{calendarError}</p>}
+                {calendarActionMessage && <p className="text-sm text-muted-foreground">{calendarActionMessage}</p>}
+
+                {!calendarError && visibleCalendarEvents.length === 0 && !calendarLoading && (
+                  <p className="text-sm text-muted-foreground">No hay eventos para el filtro actual.</p>
+                )}
+
+                {!calendarError && visibleCalendarEvents.length > 0 && (
+                  <Card className="overflow-hidden">
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-secondary border-b border-border">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-semibold">Título</th>
+                              <th className="px-3 py-2 text-left font-semibold">Inicio</th>
+                              <th className="px-3 py-2 text-left font-semibold">Fin</th>
+                              <th className="px-3 py-2 text-left font-semibold">Tipo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visibleCalendarEvents.map((event) => (
+                              <tr key={event.id} className="border-t border-border/60">
+                                <td className="px-3 py-2 align-top">{event.title}</td>
+                                <td className="px-3 py-2 align-top">{formatCalendarDateTime(event.start, event.allDay)}</td>
+                                <td className="px-3 py-2 align-top">{formatCalendarDateTime(event.end, event.allDay, event.allDay)}</td>
+                                <td className="px-3 py-2 align-top">{event.allDay ? 'All day' : 'Timed'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Crear evento</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form className="space-y-3" onSubmit={(e) => void handleCreateCalendarEvent(e)}>
+                    <Input value={newCalendarTitle} onChange={(e) => setNewCalendarTitle(e.target.value)} placeholder="Título" required />
+                    <Input type="datetime-local" value={newCalendarStart} onChange={(e) => setNewCalendarStart(e.target.value)} required />
+                    <Input type="datetime-local" value={newCalendarEnd} onChange={(e) => setNewCalendarEnd(e.target.value)} required />
+                    <Input value={newCalendarLocation} onChange={(e) => setNewCalendarLocation(e.target.value)} placeholder="Ubicación (opcional)" />
+                    <Input value={newCalendarDescription} onChange={(e) => setNewCalendarDescription(e.target.value)} placeholder="Descripción (opcional)" />
+                    <Button type="submit" className="w-full" disabled={calendarCreating}>
+                      {calendarCreating ? 'Creando...' : 'Crear evento en Calendar'}
+                    </Button>
+                  </form>
                 </CardContent>
               </Card>
-            )}
+            </div>
           </section>
         )}
       </main>

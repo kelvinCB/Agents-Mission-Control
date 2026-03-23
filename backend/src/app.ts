@@ -42,6 +42,14 @@ type CalendarEvent = {
   allDay: boolean;
 };
 
+type CalendarCreatePayload = {
+  title?: string;
+  start?: string;
+  end?: string;
+  description?: string;
+  location?: string;
+};
+
 const projects: Project[] = [
   { title: 'Task_Manager', url: 'https://kolium.com', image: 'https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?auto=format&fit=crop&w=1200&q=80', progress: 100 },
   { title: 'VPS-Visual-Dashboard', url: 'https://kelvin-vps.site', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80', progress: 100 },
@@ -93,10 +101,10 @@ function parseCalendarListOutput(stdout: string): CalendarEvent[] {
 }
 
 function isCalendarModuleEnabled(): boolean {
-  return process.env.ENABLE_GOOGLE_CALENDAR_MODULE === 'true';
+  return process.env.ENABLE_GOOGLE_CALENDAR_MODULE !== 'false';
 }
 
-async function readCalendarMonth(year: number, monthIndex: number) {
+async function resolveCalendarRuntime() {
   const candidates = resolveGoogleCalendarScriptCandidates();
   let scriptPath: string | null = null;
 
@@ -121,10 +129,13 @@ async function readCalendarMonth(year: number, monthIndex: number) {
   await fs.access(credentialsPath);
   await fs.access(tokenPath);
 
-  const fromIso = startOfMonthIso(year, monthIndex);
-  const toIso = startOfNextMonthIso(year, monthIndex);
-  const command = `node ${JSON.stringify(scriptPath)} list --from ${JSON.stringify(fromIso)} --to ${JSON.stringify(toIso)} --max 500`;
-  const { stdout } = await exec(command, {
+  return { scriptPath, scriptDir, tokenPath, credentialsPath };
+}
+
+async function runCalendarScript(args: string[]) {
+  const { scriptPath, scriptDir, tokenPath, credentialsPath } = await resolveCalendarRuntime();
+  const command = `node ${JSON.stringify(scriptPath)} ${args.map((arg) => JSON.stringify(arg)).join(' ')}`;
+  return exec(command, {
     cwd: scriptDir,
     timeout: 15000,
     env: {
@@ -133,8 +144,37 @@ async function readCalendarMonth(year: number, monthIndex: number) {
       GCAL_TOKEN: tokenPath,
     }
   });
+}
 
+async function readCalendarMonth(year: number, monthIndex: number) {
+  const fromIso = startOfMonthIso(year, monthIndex);
+  const toIso = startOfNextMonthIso(year, monthIndex);
+  const { stdout } = await runCalendarScript(['list', '--from', fromIso, '--to', toIso, '--max', '500']);
   return parseCalendarListOutput(stdout);
+}
+
+async function createCalendarEvent(payload: CalendarCreatePayload) {
+  const title = payload.title?.trim();
+  const start = payload.start?.trim();
+  const end = payload.end?.trim();
+
+  if (!title || !start || !end) {
+    throw new Error('title, start and end are required.');
+  }
+
+  const args = ['create', '--title', title, '--start', start, '--end', end];
+
+  if (payload.description?.trim()) {
+    args.push('--description', payload.description.trim());
+  }
+
+  if (payload.location?.trim()) {
+    args.push('--location', payload.location.trim());
+  }
+
+  const { stdout } = await runCalendarScript(args);
+  const link = stdout.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith('Created:'))?.replace(/^Created:\s*/, '') || null;
+  return { ok: true, link };
 }
 
 async function readMemory() {
@@ -302,7 +342,23 @@ app.get('/api/calendar', async (req, res) => {
       events
     });
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to load Google Calendar events.' });
+    const message = error instanceof Error ? error.message : 'Failed to load Google Calendar events.';
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/calendar/events', async (req, res) => {
+  try {
+    if (!isCalendarModuleEnabled()) {
+      return res.status(503).json({ error: 'Google Calendar module is disabled.' });
+    }
+
+    const result = await createCalendarEvent((req.body ?? {}) as CalendarCreatePayload);
+    return res.status(201).json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create Google Calendar event.';
+    const status = /required/i.test(message) ? 400 : 500;
+    return res.status(status).json({ error: message });
   }
 });
 
