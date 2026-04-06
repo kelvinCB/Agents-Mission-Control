@@ -25,13 +25,37 @@ jobs:
             set -euo pipefail
 
             APP_DIR="/home/kelvin/.openclaw/workspace/Agents-Mission-Control"
+            LOCAL_ONLY_FILE="ecosystem.config.cjs"
 
             cd "$APP_DIR"
 
-            # Safe update: fail if local changes would be overwritten.
+            # Fail fast if the VPS repo has unexpected local tracked changes outside the known local-only file.
+            OTHER_TRACKED_CHANGES="$(git status --porcelain --untracked-files=no | grep -v " $LOCAL_ONLY_FILE$" || true)"
+            if [ -n "$OTHER_TRACKED_CHANGES" ]; then
+              echo "Unexpected local tracked changes detected outside $LOCAL_ONLY_FILE. Aborting deploy."
+              printf '%s\n' "$OTHER_TRACKED_CHANGES"
+              exit 1
+            fi
+
+            if [ ! -f "$LOCAL_ONLY_FILE" ]; then
+              echo "$LOCAL_ONLY_FILE is missing on VPS; aborting deploy to avoid deploying with unknown PM2 config."
+              exit 1
+            fi
+
+            TMP_LOCAL_FILE="$(mktemp)"
+            chmod 600 "$TMP_LOCAL_FILE"
+            cleanup() {
+              rm -f "$TMP_LOCAL_FILE"
+            }
+            trap cleanup EXIT
+
+            cp "$LOCAL_ONLY_FILE" "$TMP_LOCAL_FILE"
+
             git fetch origin main
             git checkout main
-            git pull --ff-only origin main
+            git reset --hard origin/main
+
+            cp "$TMP_LOCAL_FILE" "$LOCAL_ONLY_FILE"
 
             npm ci
             npm run build --workspace backend
