@@ -34,6 +34,22 @@ const rootDir = path.resolve(currentDir, '..', '..');
 const dataDir = process.env.DATA_DIR || path.join(rootDir, 'data');
 
 type Project = { title: string; url: string; image: string; progress: number };
+type CalendarEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+};
+
+type CalendarCreatePayload = {
+  title?: string;
+  start?: string;
+  end?: string;
+  description?: string;
+  location?: string;
+};
+
 const projects: Project[] = [
   { title: 'Task_Manager', url: 'https://kolium.com', image: 'https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?auto=format&fit=crop&w=1200&q=80', progress: 100 },
   { title: 'VPS-Visual-Dashboard', url: 'https://kelvin-vps.site', image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80', progress: 100 },
@@ -42,6 +58,124 @@ const projects: Project[] = [
 
 const toSafeFileName = (rawName: string) =>
   String(rawName).trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_.]/g, '').replace(/\.{2,}/g, '.').replace(/^\.+/, '');
+
+function startOfMonthIso(year: number, monthIndex: number): string {
+  return new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0)).toISOString();
+}
+
+function startOfNextMonthIso(year: number, monthIndex: number): string {
+  return new Date(Date.UTC(year, monthIndex + 1, 1, 0, 0, 0, 0)).toISOString();
+}
+
+function resolveGoogleCalendarScriptCandidates(): string[] {
+  return [
+    process.env.GOOGLE_CALENDAR_SCRIPT,
+    path.join(rootDir, 'scripts', 'google-calendar', 'gcal.js'),
+    path.resolve(rootDir, '..', '..', 'scripts', 'google-calendar', 'gcal.js')
+  ].filter(Boolean) as string[];
+}
+
+function parseCalendarListOutput(stdout: string): CalendarEvent[] {
+  const blocks = stdout
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return blocks
+    .map((block) => {
+      const lines = block.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      if (lines.length < 3) return null;
+
+      const id = lines[0];
+      const rangeMatch = lines[1].match(/^(.+?)\s*->\s*(.+)$/);
+      if (!rangeMatch) return null;
+
+      const start = rangeMatch[1].trim();
+      const end = rangeMatch[2].trim();
+      const title = lines.slice(2).join(' ').trim() || '(No title)';
+      const allDay = !start.includes('T');
+
+      return { id, title, start, end, allDay } satisfies CalendarEvent;
+    })
+    .filter((event): event is CalendarEvent => event !== null);
+}
+
+function isCalendarModuleEnabled(): boolean {
+  return process.env.ENABLE_GOOGLE_CALENDAR_MODULE !== 'false';
+}
+
+async function resolveCalendarRuntime() {
+  const candidates = resolveGoogleCalendarScriptCandidates();
+  let scriptPath: string | null = null;
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      scriptPath = candidate;
+      break;
+    } catch {
+      // try next candidate
+    }
+  }
+
+  if (!scriptPath) {
+    throw new Error('Google Calendar script not configured.');
+  }
+
+  const scriptDir = path.dirname(scriptPath);
+  const tokenPath = process.env.GCAL_TOKEN || path.join(scriptDir, 'token.json');
+  const credentialsPath = process.env.GCAL_CREDENTIALS || path.join(scriptDir, 'credentials.json');
+
+  await fs.access(credentialsPath);
+  await fs.access(tokenPath);
+
+  return { scriptPath, scriptDir, tokenPath, credentialsPath };
+}
+
+async function runCalendarScript(args: string[]) {
+  const { scriptPath, scriptDir, tokenPath, credentialsPath } = await resolveCalendarRuntime();
+  const command = `node ${JSON.stringify(scriptPath)} ${args.map((arg) => JSON.stringify(arg)).join(' ')}`;
+  return exec(command, {
+    cwd: scriptDir,
+    timeout: 15000,
+    env: {
+      ...process.env,
+      GCAL_CREDENTIALS: credentialsPath,
+      GCAL_TOKEN: tokenPath,
+    }
+  });
+}
+
+async function readCalendarMonth(year: number, monthIndex: number) {
+  const fromIso = startOfMonthIso(year, monthIndex);
+  const toIso = startOfNextMonthIso(year, monthIndex);
+  const { stdout } = await runCalendarScript(['list', '--from', fromIso, '--to', toIso, '--max', '500']);
+  return parseCalendarListOutput(stdout);
+}
+
+async function createCalendarEvent(payload: CalendarCreatePayload) {
+  const title = payload.title?.trim();
+  const start = payload.start?.trim();
+  const end = payload.end?.trim();
+
+  if (!title || !start || !end) {
+    throw new Error('title, start and end are required.');
+  }
+
+  const args = ['create', '--title', title, '--start', start, '--end', end];
+
+  if (payload.description?.trim()) {
+    args.push('--description', payload.description.trim());
+  }
+
+  if (payload.location?.trim()) {
+    args.push('--location', payload.location.trim());
+  }
+
+  const { stdout } = await runCalendarScript(args);
+  const link = stdout.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith('Created:'))?.replace(/^Created:\s*/, '') || null;
+  return { ok: true, link };
+}
 
 async function readMemory() {
   const memoryRoot = path.join(dataDir, 'memory');
@@ -185,6 +319,47 @@ app.post('/api/memory/sync', async (req, res) => {
 
 app.get('/api/agenda', async (_req, res) => {
   try { res.json(await readAgenda()); } catch { res.status(500).json({ error: 'Failed to load agenda data.' }); }
+});
+
+app.get('/api/calendar', async (req, res) => {
+  try {
+    if (!isCalendarModuleEnabled()) {
+      return res.status(503).json({ error: 'Google Calendar module is disabled.' });
+    }
+
+    const now = new Date();
+    const rawYear = Number(req.query.year ?? now.getUTCFullYear());
+    const rawMonth = Number(req.query.month ?? now.getUTCMonth() + 1);
+
+    if (!Number.isInteger(rawYear) || !Number.isInteger(rawMonth) || rawMonth < 1 || rawMonth > 12) {
+      return res.status(400).json({ error: 'year and month must be valid integers.' });
+    }
+
+    const events = await readCalendarMonth(rawYear, rawMonth - 1);
+    return res.json({
+      year: rawYear,
+      month: rawMonth,
+      events
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load Google Calendar events.';
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/calendar/events', async (req, res) => {
+  try {
+    if (!isCalendarModuleEnabled()) {
+      return res.status(503).json({ error: 'Google Calendar module is disabled.' });
+    }
+
+    const result = await createCalendarEvent((req.body ?? {}) as CalendarCreatePayload);
+    return res.status(201).json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create Google Calendar event.';
+    const status = /required/i.test(message) ? 400 : 500;
+    return res.status(status).json({ error: message });
+  }
 });
 
 export default app;
